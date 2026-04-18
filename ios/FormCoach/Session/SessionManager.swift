@@ -122,7 +122,6 @@ final class SessionManager: ObservableObject {
             )
         }
         let payload = CreateSessionPayload(
-            userId: userId,
             exercises: exercises,
             totalDuration: elapsedSeconds,
             startedAt: ISO8601DateFormatter().string(from: start)

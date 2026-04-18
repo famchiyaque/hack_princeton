@@ -3,8 +3,6 @@ import Foundation
 final class APIClient {
     static let shared = APIClient()
 
-    /// Override at runtime via UserDefaults key "apiBaseURL" — useful when the
-    /// backend is running on a different machine's LAN IP.
     var baseURL: String {
         UserDefaults.standard.string(forKey: "apiBaseURL") ?? Self.defaultBaseURL
     }
@@ -15,62 +13,74 @@ final class APIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    // MARK: - Health
+    // MARK: - Auth-aware request builder
+
+    /// Creates a URLRequest with the Supabase JWT attached.
+    /// Every authenticated endpoint uses this so the backend can identify the user.
+    @MainActor private func authorizedRequest(url: URL, method: String = "GET") -> URLRequest {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = AuthManager.shared.accessToken {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return req
+    }
+
+    // MARK: - Health (public — no auth needed)
 
     func health() async throws -> Bool {
         let (data, _) = try await session.data(from: url("/health"))
         return (try? decoder.decode([String: String].self, from: data))?["status"] == "ok"
     }
 
-    // MARK: - Exercises
+    // MARK: - Exercises (public — no auth needed)
 
     func getExercises() async throws -> [APIExercise] {
         let (data, _) = try await session.data(from: url("/exercises"))
         return try decoder.decode(ExercisesResponse.self, from: data).exercises
     }
 
-    // MARK: - Users
+    // MARK: - Users (authenticated)
+
+    func getMe() async throws -> APIUser {
+        let req = await authorizedRequest(url: url("/users/me"))
+        let (data, _) = try await session.data(for: req)
+        return try decoder.decode(APIUser.self, from: data)
+    }
 
     func upsertUser(_ payload: UserPayload) async throws -> APIUser {
-        var req = URLRequest(url: url("/users"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = await authorizedRequest(url: url("/users"), method: "POST")
         req.httpBody = try encoder.encode(payload)
         let (data, _) = try await session.data(for: req)
         return try decoder.decode(APIUser.self, from: data)
     }
 
-    func getUser(id: String) async throws -> APIUser {
-        let (data, _) = try await session.data(from: url("/users/\(id)"))
-        return try decoder.decode(APIUser.self, from: data)
-    }
-
-    // MARK: - Sessions
+    // MARK: - Sessions (authenticated)
 
     func createSession(_ payload: CreateSessionPayload) async throws -> APISession {
-        var req = URLRequest(url: url("/sessions"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = await authorizedRequest(url: url("/sessions"), method: "POST")
         req.httpBody = try encoder.encode(payload)
         req.timeoutInterval = 6.0
         let (data, _) = try await session.data(for: req)
         return try decoder.decode(APISession.self, from: data)
     }
 
-    func getSessions(userId: String, limit: Int = 50) async throws -> [APISession] {
+    func getSessions(limit: Int = 50) async throws -> [APISession] {
         var comps = URLComponents(string: baseURL + "/sessions")!
         comps.queryItems = [
-            URLQueryItem(name: "userId", value: userId),
-            URLQueryItem(name: "limit",  value: String(limit)),
+            URLQueryItem(name: "limit", value: String(limit)),
         ]
-        let (data, _) = try await session.data(from: comps.url!)
+        let req = await authorizedRequest(url: comps.url!)
+        let (data, _) = try await session.data(for: req)
         return try decoder.decode(SessionsResponse.self, from: data).sessions
     }
 
-    // MARK: - Insights
+    // MARK: - Insights (authenticated — user derived from token)
 
-    func getInsights(userId: String) async throws -> APIInsights {
-        let (data, _) = try await session.data(from: url("/insights/\(userId)"))
+    func getInsights() async throws -> APIInsights {
+        let req = await authorizedRequest(url: url("/insights"))
+        let (data, _) = try await session.data(for: req)
         return try decoder.decode(APIInsights.self, from: data)
     }
 

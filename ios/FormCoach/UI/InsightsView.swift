@@ -200,7 +200,7 @@ struct InsightsView: View {
         isLoading = true
         errorMsg = nil
         do {
-            insights = try await APIClient.shared.getInsights(userId: userStore.user.id)
+            insights = try await APIClient.shared.getInsights()
         } catch {
             errorMsg = "Can't reach the backend. Check API URL in Profile."
         }

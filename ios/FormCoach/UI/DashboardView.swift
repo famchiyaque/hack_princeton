@@ -238,6 +238,6 @@ struct DashboardView: View {
     // MARK: - Data
 
     private func refresh() async {
-        insights = try? await APIClient.shared.getInsights(userId: userStore.user.id)
+        insights = try? await APIClient.shared.getInsights()
     }
 }

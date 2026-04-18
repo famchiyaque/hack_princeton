@@ -1,10 +1,9 @@
 import Foundation
 import SwiftUI
 
-/// Local user profile, persisted via UserDefaults.
-/// Mirrors the backend User model so onboarding answers can be synced.
 struct LocalUser: Codable, Equatable {
     var id: String
+    var email: String
     var name: String
     /// Training intent ids from onboarding, e.g. "bodybuilding", "strength", "fat_loss"
     var goals: [String]
@@ -76,7 +75,8 @@ struct LocalUser: Codable, Equatable {
     }
 
     static let empty = LocalUser(
-        id: UUID().uuidString,
+        id: "",
+        email: "",
         name: "Athlete",
         goals: ["athleticism"],
         fitnessLevel: "beginner",
@@ -109,6 +109,31 @@ final class UserStore: ObservableObject {
             self.user = .empty
         }
         self.hasOnboarded = defaults.bool(forKey: onboardedKey)
+    }
+
+    // MARK: - Auth binding
+
+    /// Called after Supabase auth succeeds — sets the user ID to the
+    /// Supabase UUID so all backend calls reference the same identity.
+    func bindToAuthUser(id: String, email: String) {
+        update {
+            $0.id = id
+            $0.email = email
+        }
+    }
+
+    /// Populates local user from a backend response (returning user who
+    /// already completed onboarding on another device).
+    func hydrateFromBackend(_ apiUser: APIUser) {
+        update {
+            $0.name = apiUser.name
+            $0.goal = apiUser.goal
+            $0.fitnessLevel = apiUser.fitnessLevel
+            $0.healthNotes = apiUser.healthNotes
+            $0.bodyGoals = apiUser.bodyGoals
+        }
+        hasOnboarded = true
+        UserDefaults.standard.set(true, forKey: onboardedKey)
     }
 
     // MARK: - Mutations
@@ -144,11 +169,19 @@ final class UserStore: ObservableObject {
         Task { await syncToBackend() }
     }
 
+    // MARK: - Sign out
+
+    func logout() {
+        UserDefaults.standard.removeObject(forKey: userKey)
+        UserDefaults.standard.removeObject(forKey: onboardedKey)
+        user = .empty
+        hasOnboarded = false
+    }
+
     // MARK: - Backend sync
 
     func syncToBackend() async {
         let payload = UserPayload(
-            id: user.id,
             name: user.name,
             goals: user.goals,
             fitnessLevel: user.fitnessLevel,
@@ -171,13 +204,7 @@ final class UserStore: ObservableObject {
         }
     }
 
-    // Debug helper — wipes onboarding state.
     func resetAll() {
-        UserDefaults.standard.removeObject(forKey: userKey)
-        UserDefaults.standard.removeObject(forKey: onboardedKey)
-        user = .empty
-        user.id = UUID().uuidString
-        hasOnboarded = false
-        persist()
+        logout()
     }
 }

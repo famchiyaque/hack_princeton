@@ -107,7 +107,7 @@ struct WorkoutsView: View {
         isLoading = true
         errorMsg = nil
         do {
-            sessions = try await APIClient.shared.getSessions(userId: userStore.user.id)
+            sessions = try await APIClient.shared.getSessions()
         } catch {
             errorMsg = "Make sure the backend is running and your API URL is set correctly in Profile."
         }

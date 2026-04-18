@@ -6,7 +6,7 @@
 name: FormCoach
 
 options:
-  bundleIdPrefix: com.formcoach
+  bundleIdPrefix: com.rasul
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -24,6 +24,11 @@ settings:
     Release:
       SWIFT_OPTIMIZATION_LEVEL: "-O"
 
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: "2.0.0"
+
 targets:
   FormCoach:
     type: application
@@ -35,12 +40,15 @@ targets:
         excludes:
           - "**/*.md"
 
+    dependencies:
+      - package: Supabase
+
     info:
       path: FormCoach/Info.plist
       properties:
         CFBundleName: FormCoach
         CFBundleDisplayName: FormCoach
-        CFBundleIdentifier: com.formcoach.app
+        CFBundleIdentifier: com.rasul.formcoach
         CFBundleVersion: "1"
         CFBundleShortVersionString: "1.0"
         UILaunchScreen:
@@ -53,13 +61,16 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIRequiresFullScreen: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.rasul.formcoach
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
 
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.formcoach.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.rasul.formcoach
         PRODUCT_NAME: FormCoach
         INFOPLIST_FILE: FormCoach/Info.plist
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""           # Set your Apple Developer Team ID here
+        DEVELOPMENT_TEAM: K483SM3VJC

@@ -29,7 +29,6 @@ class ExercisesResponse(BaseModel):
 # ── Users ──────────────────────────────────────────────────
 
 class UserIn(BaseModel):
-    id: str = ""
     name: str = "Athlete"
     goals: list[str] = []
     fitnessLevel: str = "beginner"
@@ -44,6 +43,7 @@ class UserIn(BaseModel):
 
 class UserOut(BaseModel):
     id: str
+    email: str
     name: str
     goals: list[str]
     fitnessLevel: str

@@ -20,6 +20,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=new_id)
+    email = Column(String, nullable=True, unique=True)
     name = Column(String, default="Athlete")
     # Legacy single goal; kept in sync with first entry in `goals` for old rows / tools
     goal = Column(String, default="athleticism")
