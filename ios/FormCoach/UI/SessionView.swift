@@ -14,8 +14,8 @@ struct SessionView: View {
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
-    @State private var lastFeedbackTime: TimeInterval = 0
     @State private var coachMessage: String = "Get into starting position"
+    @State private var lastBubbleUpdate: TimeInterval = 0
     @State private var heartRate: Int = 112
     @State private var calories: Int = 34
 
@@ -24,6 +24,7 @@ struct SessionView: View {
 
     @Environment(\.dismiss) private var dismiss
     private let comparator = FormComparator()
+    @State private var scheduler = FeedbackScheduler()
 
     var body: some View {
         GeometryReader { geo in
@@ -70,6 +71,7 @@ struct SessionView: View {
         }
         .statusBarHidden()
         .onAppear {
+            audioCoach.prefetch()  // download all ElevenLabs phrase audio in background
             camera.requestPermission()
             camera.onFrame = { [weak poseDetector] buf in
                 guard !isPaused else { return }
@@ -77,7 +79,9 @@ struct SessionView: View {
             }
             sessionMgr.startSession()
             sessionMgr.selectExercise(selectedExercise)
-            audioCoach.speak("Session started. \(selectedExercise.displayName).", priority: 9)
+            if let line = scheduler.onExerciseStarted(selectedExercise) {
+                audioCoach.speak(line, priority: 9)
+            }
         }
         .onDisappear { camera.stop() }
         .onChange(of: poseDetector.currentPose) { _, pose in
@@ -89,6 +93,9 @@ struct SessionView: View {
             repCount = 0
             peakAngle = new.downThreshold
             sessionMgr.selectExercise(new)
+            if let line = scheduler.onExerciseStarted(new) {
+                audioCoach.speak(line, priority: 9)
+            }
         }
     }
 
@@ -192,7 +199,9 @@ struct SessionView: View {
         HStack(spacing: 16) {
             Button {
                 isPaused.toggle()
-                audioCoach.speak(isPaused ? "Paused" : "Resumed", priority: 9)
+                if let line = (isPaused ? scheduler.onPaused() : scheduler.onResumed()) {
+                    audioCoach.speak(line, priority: 9)
+                }
             } label: {
                 Image(systemName: isPaused ? "play.fill" : "pause.fill")
                     .font(.system(size: 18, weight: .bold))
@@ -252,43 +261,45 @@ struct SessionView: View {
             }
         }()
 
+        let result = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
+        formResult = result
+
+        // Per-frame silent accumulation + optional mid-rep cue
+        if let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+            audioCoach.speak(line, priority: 6)
+        }
+
         // Track peak of the primary angle (direction depends on exercise)
         if let angle = primaryAngle {
             switch exercise {
             case .jumpingJacks, .deadlift:
                 peakAngle = max(peakAngle, angle)
             case .curl:
-                peakAngle = min(peakAngle, angle)  // smaller elbow = deeper curl
+                peakAngle = min(peakAngle, angle)
             default:
-                peakAngle = min(peakAngle, angle)  // smaller = deeper
+                peakAngle = min(peakAngle, angle)
             }
 
             let completed = repCounter.update(primaryAngle: angle)
             if completed {
                 repCount = repCounter.repCount
                 calories += 1
-                if let result = formResult {
-                    sessionMgr.recordRep(score: result.score,
-                                         corrections: result.corrections,
-                                         peakAngle: peakAngle)
-                }
+                sessionMgr.recordRep(score: result.score,
+                                     corrections: result.corrections,
+                                     peakAngle: peakAngle)
                 peakAngle = exercise.downThreshold
+
+                if let line = scheduler.onRepCompleted(score: result.score) {
+                    audioCoach.speak(line, priority: 7)
+                }
             }
         }
 
-        let result = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
-        formResult = result
-
-        if let top = result.corrections.first {
-            coachMessage = top.message + "..."
-        } else if result.score > 85 {
-            coachMessage = "Great form, keep it up!"
-        }
-
+        // Throttle the visual bubble to ~2 Hz so it doesn't flicker at 30 fps.
         let now = CACurrentMediaTime()
-        if now - lastFeedbackTime >= 2.5 {
-            lastFeedbackTime = now
-            audioCoach.speakCorrections(result.corrections)
+        if now - lastBubbleUpdate >= 0.5 {
+            lastBubbleUpdate = now
+            coachMessage = scheduler.visualHint(result: result)
         }
     }
 
