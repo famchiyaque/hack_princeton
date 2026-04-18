@@ -1,7 +1,7 @@
 import Vision
 import CoreGraphics
 
-struct BodyPose {
+struct BodyPose: Equatable {
     let joints: [VNHumanBodyPoseObservation.JointName: CGPoint]
     let confidences: [VNHumanBodyPoseObservation.JointName: Float]
     let timestamp: TimeInterval
