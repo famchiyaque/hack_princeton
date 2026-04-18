@@ -1,0 +1,64 @@
+{
+  "info": {
+    "title": "Hackathon API",
+    "description": "Define your endpoints here. Frontend and backend both reference this file so they stay in sync.",
+    "version": "0.1.0"
+  },
+  "baseURL": "http://localhost:8000/api",
+  "endpoints": {
+    "healthCheck": {
+      "method": "GET",
+      "path": "/health",
+      "response": { "status": "ok" }
+    },
+    "getItems": {
+      "method": "GET",
+      "path": "/items",
+      "query": ["limit", "offset", "search"],
+      "response": {
+        "items": [],
+        "total": 0
+      }
+    },
+    "getItem": {
+      "method": "GET",
+      "path": "/items/:id",
+      "response": {
+        "id": "",
+        "name": "",
+        "createdAt": ""
+      }
+    },
+    "createItem": {
+      "method": "POST",
+      "path": "/items",
+      "body": {
+        "name": ""
+      },
+      "response": {
+        "id": "",
+        "name": "",
+        "createdAt": ""
+      }
+    },
+    "updateItem": {
+      "method": "PUT",
+      "path": "/items/:id",
+      "body": {
+        "name": ""
+      },
+      "response": {
+        "id": "",
+        "name": "",
+        "updatedAt": ""
+      }
+    },
+    "deleteItem": {
+      "method": "DELETE",
+      "path": "/items/:id",
+      "response": {
+        "success": true
+      }
+    }
+  }
+}

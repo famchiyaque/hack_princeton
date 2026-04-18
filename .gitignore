@@ -1,0 +1,33 @@
+# env
+.env
+.env.local
+.env.*.local
+
+# dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+vendor/
+
+# build output
+dist/
+build/
+.next/
+out/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# db
+*.db
+*.sqlite3
+
+# logs
+*.log
