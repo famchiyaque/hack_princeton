@@ -16,6 +16,22 @@ class Exercise(Base):
     reference_data = Column(JSON, nullable=False)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=new_id)
+    name = Column(String, default="Athlete")
+    # Goal picked during onboarding: "muscle" | "lose" | "form" | "endure"
+    goal = Column(String, default="form")
+    # "beginner" | "intermediate" | "advanced"
+    fitness_level = Column(String, default="beginner")
+    # Free-form list of health notes from onboarding
+    health_notes = Column(JSON, default=list)
+    # Body goals like "stronger_core", "better_posture", etc.
+    body_goals = Column(JSON, default=list)
+    created_at = Column(String, default=func.datetime("now"))
+
+
 class Session(Base):
     __tablename__ = "sessions"
 

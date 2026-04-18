@@ -1,120 +1,87 @@
 {
   "info": {
-    "title": "FormCoach API",
-    "description": "Backend endpoints for exercise reference data and session history.",
-    "version": "1.0.0"
+    "title": "Kinetic API",
+    "description": "Backend endpoints for user profiles, exercise reference data, session history, and aggregated insights. All real-time form analysis runs on-device.",
+    "version": "1.1.0"
   },
   "baseURL": "http://localhost:8000/api",
   "endpoints": {
     "healthCheck": {
       "method": "GET",
       "path": "/health",
-      "response": { "status": "ok", "service": "formcoach" }
+      "response": { "status": "ok", "service": "kinetic" }
     },
     "getExercises": {
       "method": "GET",
       "path": "/exercises",
+      "response": { "exercises": [] }
+    },
+    "upsertUser": {
+      "method": "POST",
+      "path": "/users",
+      "body": {
+        "id": "uuid-or-blank",
+        "name": "Alex",
+        "goal": "form",
+        "fitnessLevel": "beginner",
+        "healthNotes": ["knee_pain"],
+        "bodyGoals": ["stronger_core", "better_posture"]
+      },
       "response": {
-        "exercises": [
-          {
-            "id": "pushup",
-            "name": "Push-Up",
-            "phases": [
-              {
-                "name": "bottom",
-                "referenceAngles": {
-                  "elbowAngle": { "min": 70, "max": 100 },
-                  "hipAngle":   { "min": 160, "max": 180 },
-                  "spineAngle": { "min": 160, "max": 180 }
-                }
-              },
-              {
-                "name": "top",
-                "referenceAngles": {
-                  "elbowAngle": { "min": 155, "max": 180 },
-                  "hipAngle":   { "min": 160, "max": 180 },
-                  "spineAngle": { "min": 160, "max": 180 }
-                }
-              }
-            ],
-            "corrections": {
-              "elbowAngle_high": "Go deeper",
-              "elbowAngle_low":  "Fully extend your arms",
-              "hipAngle_low":    "Keep your hips up",
-              "spineAngle_low":  "Straighten your back"
-            }
-          }
-        ]
+        "id": "", "name": "", "goal": "", "fitnessLevel": "",
+        "healthNotes": [], "bodyGoals": [], "createdAt": ""
       }
     },
-    "getExercise": {
+    "getUser": {
       "method": "GET",
-      "path": "/exercises/:id",
-      "response": {
-        "id": "pushup",
-        "name": "Push-Up",
-        "phases": [],
-        "corrections": {}
-      }
+      "path": "/users/:id",
+      "response": { "id": "", "name": "", "goal": "", "fitnessLevel": "", "healthNotes": [], "bodyGoals": [], "createdAt": "" }
     },
     "createSession": {
       "method": "POST",
       "path": "/sessions",
       "body": {
-        "userId": "anonymous",
+        "userId": "",
         "exercises": [
           {
-            "exerciseId": "pushup",
+            "exerciseId": "squat",
             "reps": 10,
-            "avgScore": 78.5,
-            "duration": 45,
-            "corrections": [{ "type": "elbowAngle_high", "count": 3 }]
+            "avgScore": 82.5,
+            "duration": 90,
+            "corrections": [{ "type": "kneeAngle", "count": 3 }]
           }
         ],
-        "totalDuration": 120,
-        "startedAt": "2026-04-18T10:00:00Z"
+        "totalDuration": 180,
+        "startedAt": "ISO8601"
       },
       "response": {
-        "id": "",
-        "userId": "anonymous",
-        "totalDuration": 120,
-        "startedAt": "",
-        "createdAt": "",
-        "exercises": []
+        "id": "", "userId": "", "totalDuration": 0, "startedAt": "", "createdAt": "", "exercises": []
       }
     },
     "getSessions": {
       "method": "GET",
       "path": "/sessions",
       "query": ["userId", "limit", "offset"],
-      "response": {
-        "sessions": [],
-        "total": 0
-      }
+      "response": { "sessions": [], "total": 0 }
     },
     "getSession": {
       "method": "GET",
       "path": "/sessions/:id",
-      "response": {
-        "id": "",
-        "userId": "anonymous",
-        "totalDuration": 0,
-        "startedAt": "",
-        "createdAt": "",
-        "exercises": []
-      }
+      "response": {}
     },
-    "analyzeSession": {
-      "method": "POST",
-      "path": "/analysis",
-      "note": "Stretch goal — requires ANTHROPIC_API_KEY in .env",
-      "body": {
-        "sessionId": "",
-        "rawData": {}
-      },
+    "getInsights": {
+      "method": "GET",
+      "path": "/insights/:userId",
+      "note": "Deterministic aggregation across all of a user's stored sessions.",
       "response": {
-        "summary": "",
-        "tips": []
+        "totalSessions": 0,
+        "totalReps": 0,
+        "totalMinutes": 0,
+        "overallAvgScore": 0.0,
+        "streakDays": 0,
+        "byExercise": [],
+        "topCorrections": [],
+        "last7DaysMinutes": [0, 0, 0, 0, 0, 0, 0]
       }
     }
   }

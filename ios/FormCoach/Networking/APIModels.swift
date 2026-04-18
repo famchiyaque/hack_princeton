@@ -23,6 +23,27 @@ struct ExercisesResponse: Codable {
     let exercises: [APIExercise]
 }
 
+// MARK: - Users
+
+struct UserPayload: Codable {
+    let id: String
+    let name: String
+    let goal: String
+    let fitnessLevel: String
+    let healthNotes: [String]
+    let bodyGoals: [String]
+}
+
+struct APIUser: Codable, Identifiable {
+    let id: String
+    let name: String
+    let goal: String
+    let fitnessLevel: String
+    let healthNotes: [String]
+    let bodyGoals: [String]
+    let createdAt: String
+}
+
 // MARK: - Sessions
 
 struct CorrectionCountPayload: Codable {
@@ -66,4 +87,25 @@ struct APISession: Codable, Identifiable {
 struct SessionsResponse: Codable {
     let sessions: [APISession]
     let total: Int
+}
+
+// MARK: - Insights
+
+struct APIExerciseStat: Codable, Identifiable {
+    var id: String { exerciseId }
+    let exerciseId: String
+    let totalReps: Int
+    let avgScore: Double
+    let sessionCount: Int
+}
+
+struct APIInsights: Codable {
+    let totalSessions: Int
+    let totalReps: Int
+    let totalMinutes: Int
+    let overallAvgScore: Double
+    let streakDays: Int
+    let byExercise: [APIExerciseStat]
+    let topCorrections: [CorrectionCountPayload]
+    let last7DaysMinutes: [Int]
 }

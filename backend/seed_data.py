@@ -1,4 +1,9 @@
-"""Reference exercise data — seeded on startup if table is empty."""
+"""Reference exercise data — seeded on startup if table is empty.
+
+Angle ranges are the canonical "good form" windows.
+Each exercise has named phases; the client matches the current
+posture to a phase and compares angles to these ranges.
+"""
 
 EXERCISES = [
     {
@@ -62,6 +67,35 @@ EXERCISES = [
         },
     },
     {
+        "id": "deadlift",
+        "name": "Deadlift",
+        "reference_data": {
+            "phases": [
+                {
+                    "name": "bottom",
+                    "referenceAngles": {
+                        "kneeAngle":  {"min": 110, "max": 140},
+                        "hipAngle":   {"min": 70,  "max": 110},
+                        "spineAngle": {"min": 160, "max": 180},
+                    },
+                },
+                {
+                    "name": "top",
+                    "referenceAngles": {
+                        "kneeAngle":  {"min": 165, "max": 180},
+                        "hipAngle":   {"min": 165, "max": 180},
+                        "spineAngle": {"min": 165, "max": 180},
+                    },
+                },
+            ],
+            "corrections": {
+                "spineAngle_low":  "Keep your back flat — don't round",
+                "hipAngle_low":    "Drive your hips forward",
+                "kneeAngle_low":   "Don't squat the deadlift",
+            },
+        },
+    },
+    {
         "id": "plank",
         "name": "Plank",
         "reference_data": {
@@ -109,6 +143,59 @@ EXERCISES = [
                 "kneeAngle_high":  "Lower your back knee",
                 "spineAngle_low":  "Keep your torso upright",
                 "hipAngle_low":    "Drive your hips forward",
+            },
+        },
+    },
+    {
+        "id": "jumping_jacks",
+        "name": "Jumping Jacks",
+        "reference_data": {
+            "phases": [
+                {
+                    "name": "open",
+                    "referenceAngles": {
+                        "shoulderAngle": {"min": 150, "max": 180},
+                        "hipAngle":      {"min": 150, "max": 180},
+                    },
+                },
+                {
+                    "name": "closed",
+                    "referenceAngles": {
+                        "shoulderAngle": {"min": 0,   "max": 40},
+                        "hipAngle":      {"min": 165, "max": 180},
+                    },
+                },
+            ],
+            "corrections": {
+                "shoulderAngle_low": "Raise your arms higher",
+                "hipAngle_low":      "Jump wider",
+            },
+        },
+    },
+    {
+        "id": "curl",
+        "name": "Bicep Curl",
+        "reference_data": {
+            "phases": [
+                {
+                    "name": "bottom",
+                    "referenceAngles": {
+                        "elbowAngle": {"min": 150, "max": 180},
+                        "spineAngle": {"min": 165, "max": 180},
+                    },
+                },
+                {
+                    "name": "top",
+                    "referenceAngles": {
+                        "elbowAngle": {"min": 30,  "max": 60},
+                        "spineAngle": {"min": 165, "max": 180},
+                    },
+                },
+            ],
+            "corrections": {
+                "elbowAngle_high":  "Curl higher",
+                "elbowAngle_low":   "Fully extend at the bottom",
+                "spineAngle_low":   "Stop swinging — keep your back straight",
             },
         },
     },

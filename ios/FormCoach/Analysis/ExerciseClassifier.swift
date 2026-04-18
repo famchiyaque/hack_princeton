@@ -1,31 +1,56 @@
 import Vision
 
-enum ExerciseType: String, CaseIterable, Identifiable {
-    case pushup, squat, plank, lunge, unknown
+enum ExerciseType: String, CaseIterable, Identifiable, Codable {
+    case pushup, squat, deadlift, plank, lunge, jumpingJacks = "jumping_jacks", curl, unknown
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .pushup:  "Push-Up"
-        case .squat:   "Squat"
-        case .plank:   "Plank"
-        case .lunge:   "Lunge"
-        case .unknown: "Unknown"
+        case .pushup:       "Push-Up"
+        case .squat:        "Squat"
+        case .deadlift:     "Deadlift"
+        case .plank:        "Plank"
+        case .lunge:        "Lunge"
+        case .jumpingJacks: "Jumping Jacks"
+        case .curl:         "Bicep Curl"
+        case .unknown:      "Unknown"
         }
     }
 
-    /// The primary angle used for rep counting
-    var primaryAngleKeyPath: KeyPath<BodyAngles, Double?> {
+    var icon: String {
         switch self {
-        case .pushup:             \.elbowAngle
-        case .squat, .lunge:      \.kneeAngle
-        case .plank, .unknown:    \.hipAngle
+        case .pushup:       "figure.strengthtraining.traditional"
+        case .squat:        "figure.cooldown"
+        case .deadlift:     "figure.strengthtraining.functional"
+        case .plank:        "figure.core.training"
+        case .lunge:        "figure.step.training"
+        case .jumpingJacks: "figure.mixed.cardio"
+        case .curl:         "dumbbell.fill"
+        case .unknown:      "questionmark"
         }
     }
 
-    var downThreshold: Double { self == .plank ? 90 : 100 }
-    var upThreshold: Double   { self == .plank ? 90 : 155 }
+    /// Thresholds used by the RepCounter for this exercise.
+    var downThreshold: Double {
+        switch self {
+        case .pushup:       100  // elbow
+        case .squat, .lunge: 100 // knee
+        case .deadlift:     110  // hip
+        case .curl:         60   // elbow (top of curl)
+        case .jumpingJacks: 40   // shoulder (closed)
+        case .plank, .unknown: 90
+        }
+    }
+
+    var upThreshold: Double {
+        switch self {
+        case .pushup, .squat, .lunge, .deadlift: 155
+        case .curl:         150
+        case .jumpingJacks: 150
+        case .plank, .unknown: 90
+        }
+    }
 }
 
 enum BodyOrientation { case upright, horizontal, other }
@@ -70,7 +95,10 @@ final class ExerciseClassifier: ObservableObject {
             if let lk = angles.leftKnee, let rk = angles.rightKnee, abs(lk - rk) > 30 {
                 return .lunge
             }
-            if angles.kneeAngle.map({ $0 < 150 }) == true || isBending(\.kneeAngle) {
+            if let shoulder = angles.shoulderAngle, shoulder > 120 {
+                return .jumpingJacks
+            }
+            if isBending(\.kneeAngle) {
                 return .squat
             }
             return .unknown

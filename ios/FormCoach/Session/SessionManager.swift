@@ -1,15 +1,18 @@
 import Foundation
 import Combine
 
+// MARK: - Internal session state
+
 struct WorkoutExercise {
     var exerciseId: String
-    var reps: Int = 0
-    var scores: [Double] = []
+    var reps: [RepRecord] = []
     var corrections: [String: Int] = [:]
     var startedAt: Date = .init()
 
+    var repCount: Int { reps.count }
+    var scores: [Double] { reps.map(\.score) }
     var avgScore: Double { scores.isEmpty ? 0 : scores.reduce(0, +) / Double(scores.count) }
-    var duration: Int   { Int(Date().timeIntervalSince(startedAt)) }
+    var duration: Int { Int(Date().timeIntervalSince(startedAt)) }
 }
 
 @MainActor
@@ -23,12 +26,14 @@ final class SessionManager: ObservableObject {
     private var sessionStart: Date?
     private var completedExercises: [WorkoutExercise] = []
     private var activeExercise: WorkoutExercise?
+    private var lastRepAt: Date?
     private var timer: AnyCancellable?
 
     // MARK: - Lifecycle
 
     func startSession() {
         sessionStart = .init()
+        lastRepAt = .init()
         isActive = true
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in
@@ -43,12 +48,35 @@ final class SessionManager: ObservableObject {
         activeExercise = WorkoutExercise(exerciseId: type.rawValue)
     }
 
-    func recordRep(score: Double, corrections: [FormCorrection]) {
+    func recordRep(score: Double, corrections: [FormCorrection], peakAngle: Double) {
         totalReps += 1
         latestScore = score
-        activeExercise?.reps += 1
-        activeExercise?.scores.append(score)
+
+        let now = Date()
+        let durationMs = Int((now.timeIntervalSince(lastRepAt ?? now)) * 1000)
+        lastRepAt = now
+
+        let record = RepRecord(
+            index: (activeExercise?.repCount ?? 0) + 1,
+            exercise: currentExercise,
+            score: score,
+            peakPrimaryAngle: peakAngle,
+            durationMs: durationMs,
+            topCorrection: corrections.first?.joint
+        )
+        activeExercise?.reps.append(record)
         for c in corrections { activeExercise?.corrections[c.joint, default: 0] += 1 }
+    }
+
+    /// Build the on-device report for the active exercise.
+    func buildReport() -> SessionReport {
+        let active = activeExercise ?? WorkoutExercise(exerciseId: currentExercise.rawValue)
+        return SessionAnalyzer.analyze(
+            exercise: currentExercise,
+            durationSeconds: elapsedSeconds,
+            reps: active.reps,
+            correctionsByType: active.corrections
+        )
     }
 
     func endSession() async {
@@ -63,7 +91,7 @@ final class SessionManager: ObservableObject {
         isActive = false
         currentExercise = .unknown
         totalReps = 0; latestScore = 0; elapsedSeconds = 0
-        sessionStart = nil
+        sessionStart = nil; lastRepAt = nil
         completedExercises = []; activeExercise = nil
         timer?.cancel()
     }
@@ -72,17 +100,19 @@ final class SessionManager: ObservableObject {
 
     private func postToBackend() async {
         guard let start = sessionStart else { return }
+        let userId = await UserStore.shared.user.id
+
         let exercises = completedExercises.map { ex in
             SessionExercisePayload(
                 exerciseId: ex.exerciseId,
-                reps: ex.reps,
+                reps: ex.repCount,
                 avgScore: ex.avgScore,
                 duration: ex.duration,
                 corrections: ex.corrections.map { CorrectionCountPayload(type: $0.key, count: $0.value) }
             )
         }
         let payload = CreateSessionPayload(
-            userId: "anonymous",
+            userId: userId,
             exercises: exercises,
             totalDuration: elapsedSeconds,
             startedAt: ISO8601DateFormatter().string(from: start)

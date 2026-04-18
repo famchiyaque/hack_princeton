@@ -1,6 +1,4 @@
-from pydantic import BaseModel, Field
-from typing import Any
-import uuid
+from pydantic import BaseModel
 
 
 # ── Exercises ──────────────────────────────────────────────
@@ -26,6 +24,29 @@ class ExerciseOut(BaseModel):
 
 class ExercisesResponse(BaseModel):
     exercises: list[ExerciseOut]
+
+
+# ── Users ──────────────────────────────────────────────────
+
+class UserIn(BaseModel):
+    id: str = ""
+    name: str = "Athlete"
+    goal: str = "form"
+    fitnessLevel: str = "beginner"
+    healthNotes: list[str] = []
+    bodyGoals: list[str] = []
+
+
+class UserOut(BaseModel):
+    id: str
+    name: str
+    goal: str
+    fitnessLevel: str
+    healthNotes: list[str]
+    bodyGoals: list[str]
+    createdAt: str
+
+    model_config = {"from_attributes": True}
 
 
 # ── Sessions ───────────────────────────────────────────────
@@ -77,13 +98,21 @@ class SessionsResponse(BaseModel):
     total: int
 
 
-# ── Analysis ───────────────────────────────────────────────
+# ── Insights ───────────────────────────────────────────────
 
-class AnalysisRequest(BaseModel):
-    sessionId: str
-    rawData: dict[str, Any] = {}
+class ExerciseStat(BaseModel):
+    exerciseId: str
+    totalReps: int
+    avgScore: float
+    sessionCount: int
 
 
-class AnalysisResponse(BaseModel):
-    summary: str
-    tips: list[str]
+class InsightsResponse(BaseModel):
+    totalSessions: int
+    totalReps: int
+    totalMinutes: int
+    overallAvgScore: float
+    streakDays: int
+    byExercise: list[ExerciseStat]
+    topCorrections: list[CorrectionCount]
+    last7DaysMinutes: list[int]  # index 0 = 6 days ago, index 6 = today

@@ -4,7 +4,8 @@ import SwiftUI
 struct FormCoachApp: App {
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView()
+                .preferredColorScheme(.dark)
         }
     }
 }

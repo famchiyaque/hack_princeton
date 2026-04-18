@@ -5,20 +5,15 @@ final class RepCounter {
 
     private(set) var repCount = 0
     private(set) var phase: Phase = .up
-    private(set) var lastCompletedPhase: Phase = .up
 
+    let exercise: ExerciseType
     private let downThreshold: Double
     private let upThreshold: Double
 
     init(exercise: ExerciseType) {
-        switch exercise {
-        case .pushup:
-            downThreshold = 100; upThreshold = 155
-        case .squat, .lunge:
-            downThreshold = 100; upThreshold = 155
-        case .plank, .unknown:
-            downThreshold = 90; upThreshold = 90
-        }
+        self.exercise = exercise
+        self.downThreshold = exercise.downThreshold
+        self.upThreshold   = exercise.upThreshold
     }
 
     /// Returns true when a rep just completed.
@@ -30,7 +25,7 @@ final class RepCounter {
             if primaryAngle < downThreshold + 20 { phase = .goingDown }
         case .goingDown:
             if primaryAngle <= downThreshold     { phase = .down }
-            if primaryAngle > upThreshold        { phase = .up }   // aborted
+            if primaryAngle > upThreshold        { phase = .up }
         case .down:
             if primaryAngle > downThreshold + 20 { phase = .comingUp }
         case .comingUp:

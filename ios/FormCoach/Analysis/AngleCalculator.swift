@@ -24,17 +24,16 @@ struct BodyAngles {
     let rightKnee: Double?
     let leftHip: Double?
     let rightHip: Double?
+    let leftShoulder: Double?
+    let rightShoulder: Double?
     let spine: Double?
 
-    var elbowAngle: Double? {
-        switch (leftElbow, rightElbow) {
-        case let (l?, r?): return (l + r) / 2
-        case let (l?, nil): return l
-        case let (nil, r?): return r
-        default: return nil
-        }
-    }
+    var elbowAngle: Double? { mean(leftElbow, rightElbow) }
+    var hipAngle: Double?   { mean(leftHip, rightHip) }
+    /// Shoulder angle — angle between torso and upper arm. Used for jumping jacks, curls.
+    var shoulderAngle: Double? { mean(leftShoulder, rightShoulder) }
 
+    /// For squats/lunges we care about the deepest knee bend → use minimum.
     var kneeAngle: Double? {
         switch (leftKnee, rightKnee) {
         case let (l?, r?): return min(l, r)
@@ -44,8 +43,8 @@ struct BodyAngles {
         }
     }
 
-    var hipAngle: Double? {
-        switch (leftHip, rightHip) {
+    private func mean(_ a: Double?, _ b: Double?) -> Double? {
+        switch (a, b) {
         case let (l?, r?): return (l + r) / 2
         case let (l?, nil): return l
         case let (nil, r?): return r
@@ -56,35 +55,12 @@ struct BodyAngles {
     static func from(pose: BodyPose) -> BodyAngles {
         func p(_ j: VNHumanBodyPoseObservation.JointName) -> CGPoint? { pose.point(for: j) }
 
-        let leftElbow: Double? = {
-            guard let a = p(.leftShoulder), let b = p(.leftElbow), let c = p(.leftWrist) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
-
-        let rightElbow: Double? = {
-            guard let a = p(.rightShoulder), let b = p(.rightElbow), let c = p(.rightWrist) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
-
-        let leftKnee: Double? = {
-            guard let a = p(.leftHip), let b = p(.leftKnee), let c = p(.leftAnkle) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
-
-        let rightKnee: Double? = {
-            guard let a = p(.rightHip), let b = p(.rightKnee), let c = p(.rightAnkle) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
-
-        let leftHip: Double? = {
-            guard let a = p(.leftShoulder), let b = p(.leftHip), let c = p(.leftKnee) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
-
-        let rightHip: Double? = {
-            guard let a = p(.rightShoulder), let b = p(.rightHip), let c = p(.rightKnee) else { return nil }
-            return AngleCalculator.angle(between: a, vertex: b, and: c)
-        }()
+        func angleAt(_ a: VNHumanBodyPoseObservation.JointName,
+                     _ b: VNHumanBodyPoseObservation.JointName,
+                     _ c: VNHumanBodyPoseObservation.JointName) -> Double? {
+            guard let pa = p(a), let pb = p(b), let pc = p(c) else { return nil }
+            return AngleCalculator.angle(between: pa, vertex: pb, and: pc)
+        }
 
         let spine: Double? = {
             let shoulder = p(.leftShoulder) ?? p(.rightShoulder)
@@ -93,9 +69,14 @@ struct BodyAngles {
         }()
 
         return BodyAngles(
-            leftElbow: leftElbow, rightElbow: rightElbow,
-            leftKnee: leftKnee, rightKnee: rightKnee,
-            leftHip: leftHip, rightHip: rightHip,
+            leftElbow:     angleAt(.leftShoulder,  .leftElbow,  .leftWrist),
+            rightElbow:    angleAt(.rightShoulder, .rightElbow, .rightWrist),
+            leftKnee:      angleAt(.leftHip,       .leftKnee,   .leftAnkle),
+            rightKnee:     angleAt(.rightHip,      .rightKnee,  .rightAnkle),
+            leftHip:       angleAt(.leftShoulder,  .leftHip,    .leftKnee),
+            rightHip:      angleAt(.rightShoulder, .rightHip,   .rightKnee),
+            leftShoulder:  angleAt(.leftHip,       .leftShoulder,  .leftElbow),
+            rightShoulder: angleAt(.rightHip,      .rightShoulder, .rightElbow),
             spine: spine
         )
     }

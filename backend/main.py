@@ -1,6 +1,17 @@
 """
-FormCoach API — FastAPI backend
-Run: uvicorn main:app --reload --port 8000
+Kinetic API — FastAPI backend
+Run: uvicorn main:app --reload --port 8000 --host 0.0.0.0
+
+NOTE on architecture:
+ - All real-time form analysis, rep counting, and in-session feedback
+   happens ON-DEVICE in the iOS app for latency and offline support.
+ - This backend's responsibilities are strictly:
+     * Serve canonical exercise reference data
+     * Store user profile (onboarding answers)
+     * Persist completed session summaries
+     * Aggregate historical data for the Insights tab
+ - No AI / LLM calls are made server-side. Session reports are
+   computed deterministically by the iOS client (SessionAnalyzer.swift).
 """
 import os
 from fastapi import FastAPI
@@ -11,11 +22,10 @@ load_dotenv("../.env")
 
 from database import engine, SessionLocal
 from models import Base
-from routers import exercises, sessions, analysis
+from routers import exercises, sessions, users, insights
 import seed_data
 
-# ── App ──────────────────────────────────────────────────────────
-app = FastAPI(title="FormCoach API", version="1.0.0")
+app = FastAPI(title="Kinetic API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,7 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Startup ──────────────────────────────────────────────────────
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -35,12 +45,13 @@ def startup():
     finally:
         db.close()
 
-# ── Routers ──────────────────────────────────────────────────────
+
 app.include_router(exercises.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
-app.include_router(analysis.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(insights.router, prefix="/api")
 
-# ── Health ───────────────────────────────────────────────────────
+
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "formcoach"}
+    return {"status": "ok", "service": "kinetic"}
