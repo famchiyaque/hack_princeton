@@ -1,0 +1,83 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session as DBSession
+from database import get_db
+from models import Session, SessionExercise
+from schemas import CreateSessionBody, SessionOut, SessionsResponse, SessionExerciseOut, CorrectionCount
+from datetime import datetime, timezone
+import uuid
+
+router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _exercise_to_out(se: SessionExercise) -> SessionExerciseOut:
+    corrections = [CorrectionCount(**c) for c in (se.corrections or [])]
+    return SessionExerciseOut(
+        id=se.id,
+        exerciseId=se.exercise_id,
+        reps=se.reps,
+        avgScore=se.avg_score,
+        duration=se.duration,
+        corrections=corrections,
+    )
+
+
+def _session_to_out(s: Session) -> SessionOut:
+    return SessionOut(
+        id=s.id,
+        userId=s.user_id,
+        totalDuration=s.total_duration or 0,
+        startedAt=s.started_at or "",
+        createdAt=s.created_at or "",
+        exercises=[_exercise_to_out(e) for e in s.exercises],
+    )
+
+
+@router.post("", response_model=SessionOut, status_code=201)
+def create_session(body: CreateSessionBody, db: DBSession = Depends(get_db)):
+    session_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    session = Session(
+        id=session_id,
+        user_id=body.userId,
+        total_duration=body.totalDuration,
+        started_at=body.startedAt or now,
+        created_at=now,
+    )
+    db.add(session)
+
+    for ex in body.exercises:
+        db.add(SessionExercise(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            exercise_id=ex.exerciseId,
+            reps=ex.reps,
+            avg_score=ex.avgScore,
+            duration=ex.duration,
+            corrections=[c.model_dump() for c in ex.corrections],
+        ))
+
+    db.commit()
+    db.refresh(session)
+    return _session_to_out(session)
+
+
+@router.get("", response_model=SessionsResponse)
+def list_sessions(
+    userId: str = "anonymous",
+    limit: int = 20,
+    offset: int = 0,
+    db: DBSession = Depends(get_db),
+):
+    query = db.query(Session).filter(Session.user_id == userId)
+    total = query.count()
+    sessions = query.order_by(Session.created_at.desc()).offset(offset).limit(limit).all()
+    return SessionsResponse(sessions=[_session_to_out(s) for s in sessions], total=total)
+
+
+@router.get("/{session_id}", response_model=SessionOut)
+def get_session(session_id: str, db: DBSession = Depends(get_db)):
+    s = db.query(Session).filter(Session.id == session_id).first()
+    if not s:
+        raise HTTPException(404, "Session not found")
+    return _session_to_out(s)

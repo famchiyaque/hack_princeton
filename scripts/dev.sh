@@ -29,9 +29,9 @@ echo ""
 # FRONTEND_CMD="cd frontend && npm run dev"
 # BACKEND_CMD="cd backend && go run ."
 
-# --- Default: placeholder ---
-FRONTEND_CMD="${FRONTEND_CMD:-echo '[frontend] Set FRONTEND_CMD in dev.sh or .env'}"
-BACKEND_CMD="${BACKEND_CMD:-echo '[backend] Set BACKEND_CMD in dev.sh or .env'}"
+# --- FormCoach: FastAPI backend only (iOS app runs on device) ---
+FRONTEND_CMD="${FRONTEND_CMD:-echo '[frontend] iOS app — open ios/FormCoach.xcodeproj in Xcode and run on device'}"
+BACKEND_CMD="${BACKEND_CMD:-cd backend && uvicorn main:app --reload --port ${BACKEND_PORT:-8000}}"
 
 # Run both in parallel, prefix output
 $BACKEND_CMD &

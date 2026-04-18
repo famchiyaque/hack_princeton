@@ -1,0 +1,65 @@
+# XcodeGen project spec
+# Install XcodeGen:  brew install xcodegen
+# Generate project:  cd ios && xcodegen generate
+# Open project:      open FormCoach.xcodeproj
+
+name: FormCoach
+
+options:
+  bundleIdPrefix: com.formcoach
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    ENABLE_PREVIEWS: "YES"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+  configs:
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+targets:
+  FormCoach:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - path: FormCoach
+        excludes:
+          - "**/*.md"
+
+    info:
+      path: FormCoach/Info.plist
+      properties:
+        CFBundleName: FormCoach
+        CFBundleDisplayName: FormCoach
+        CFBundleIdentifier: com.formcoach.app
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0"
+        UILaunchScreen:
+          UIColorName: ""
+          UIImageName: ""
+        NSCameraUsageDescription: "FormCoach uses your camera to analyze workout form in real time."
+        NSMicrophoneUsageDescription: "FormCoach uses the microphone for audio coaching via AirPods."
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.formcoach.app
+        PRODUCT_NAME: FormCoach
+        INFOPLIST_FILE: FormCoach/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""           # Set your Apple Developer Team ID here
