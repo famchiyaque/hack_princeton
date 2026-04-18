@@ -1,4 +1,5 @@
 import Vision
+import CoreGraphics
 
 enum ExerciseType: String, CaseIterable, Identifiable, Codable {
     case pushup, squat, deadlift, plank, lunge, jumpingJacks = "jumping_jacks", curl, unknown
@@ -53,64 +54,144 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum BodyOrientation { case upright, horizontal, other }
-
+/// Real-time classifier restricted (for the demo) to squat, deadlift, or unknown.
+///
+/// Strategy:
+///  - Maintain a ~0.7 s rolling window of angle samples + wrist-y travel.
+///  - Each classification tick, extract signature features (spine uprightness,
+///    knee vs hip motion range, wrist vertical sweep).
+///  - Require `stickyWindows` consecutive matching windows before flipping
+///    `detectedExercise` so the label doesn't flicker during transitions.
 final class ExerciseClassifier: ObservableObject {
     @Published var detectedExercise: ExerciseType = .unknown
+    /// True once the current label has been confirmed by the sticky filter.
+    /// Useful for UI that wants to show a "Detecting..." state early on.
+    @Published var isStable: Bool = false
 
-    private var recentAngles: [BodyAngles] = []
+    // MARK: - Tunables
+
+    /// Window size in frames (~0.7 s at 30 fps).
+    private let windowSize = 20
+    /// Classify every N frames. Smaller = more responsive, more CPU.
+    private let classifyEvery = 6
+    /// Consecutive windows that must agree before `detectedExercise` flips.
+    private let stickyWindows = 3
+
+    // MARK: - State
+
+    private struct Sample {
+        let angles: BodyAngles
+        let wristY: CGFloat?      // mean of left/right wrist y (normalized 0-1)
+        let hipY: CGFloat?        // mean hip y
+    }
+
+    private var samples: [Sample] = []
     private var frameCount = 0
-    private let historySize = 15
-    private let classifyEvery = 15
+    private var candidateLabel: ExerciseType = .unknown
+    private var candidateStreak: Int = 0
+
+    // MARK: - Public API
 
     func update(angles: BodyAngles, pose: BodyPose) {
-        recentAngles.append(angles)
-        if recentAngles.count > historySize { recentAngles.removeFirst() }
+        samples.append(Sample(
+            angles: angles,
+            wristY: meanY(pose.point(for: .leftWrist), pose.point(for: .rightWrist)),
+            hipY:   meanY(pose.point(for: .leftHip),   pose.point(for: .rightHip))
+        ))
+        if samples.count > windowSize { samples.removeFirst(samples.count - windowSize) }
+
         frameCount += 1
-        guard frameCount % classifyEvery == 0 else { return }
+        guard frameCount % classifyEvery == 0, samples.count >= windowSize else { return }
 
-        let orientation = bodyOrientation(from: pose)
-        let result = classify(angles: angles, orientation: orientation)
-        DispatchQueue.main.async { self.detectedExercise = result }
-    }
+        let raw = classifyWindow()
+        if raw == candidateLabel {
+            candidateStreak += 1
+        } else {
+            candidateLabel = raw
+            candidateStreak = 1
+        }
 
-    private func bodyOrientation(from pose: BodyPose) -> BodyOrientation {
-        guard let nose = pose.point(for: .nose), let hip = pose.point(for: .root) else { return .other }
-        let vDiff = abs(nose.y - hip.y)
-        let hDiff = abs(nose.x - hip.x)
-        if vDiff > hDiff * 1.5 { return .upright }
-        if hDiff > vDiff * 1.5 { return .horizontal }
-        return .other
-    }
+        guard candidateStreak >= stickyWindows else { return }
 
-    private func classify(angles: BodyAngles, orientation: BodyOrientation) -> ExerciseType {
-        switch orientation {
-        case .horizontal:
-            if let hip = angles.hipAngle, let elbow = angles.elbowAngle, hip > 160, elbow > 150 {
-                return .plank
+        if candidateLabel != detectedExercise {
+            DispatchQueue.main.async {
+                self.detectedExercise = self.candidateLabel
+                self.isStable = true
             }
-            return .pushup
-
-        case .upright:
-            if let lk = angles.leftKnee, let rk = angles.rightKnee, abs(lk - rk) > 30 {
-                return .lunge
-            }
-            if let shoulder = angles.shoulderAngle, shoulder > 120 {
-                return .jumpingJacks
-            }
-            if isBending(\.kneeAngle) {
-                return .squat
-            }
-            return .unknown
-
-        case .other:
-            return .unknown
+        } else if !isStable {
+            DispatchQueue.main.async { self.isStable = true }
         }
     }
 
-    private func isBending(_ kp: KeyPath<BodyAngles, Double?>) -> Bool {
-        let vals = recentAngles.compactMap { $0[keyPath: kp] }
-        guard vals.count >= 3 else { return false }
-        return vals.last! < vals[vals.count - 3] - 15
+    func reset() {
+        samples.removeAll()
+        frameCount = 0
+        candidateLabel = .unknown
+        candidateStreak = 0
+        DispatchQueue.main.async {
+            self.detectedExercise = .unknown
+            self.isStable = false
+        }
+    }
+
+    // MARK: - Feature extraction
+
+    private func classifyWindow() -> ExerciseType {
+        let spineVals = samples.compactMap { $0.angles.spine }
+        let kneeVals  = samples.compactMap { $0.angles.kneeAngle }
+        let hipVals   = samples.compactMap { $0.angles.hipAngle }
+        let wristYs   = samples.compactMap { $0.wristY }
+
+        // Need enough data in the primary channels to say anything at all.
+        guard kneeVals.count >= windowSize / 2,
+              hipVals.count  >= windowSize / 2 else {
+            return .unknown
+        }
+
+        let spineMean = spineVals.isEmpty ? 180.0 : spineVals.reduce(0, +) / Double(spineVals.count)
+        let kneeRange = (kneeVals.max() ?? 0) - (kneeVals.min() ?? 0)
+        let hipRange  = (hipVals.max()  ?? 0) - (hipVals.min()  ?? 0)
+        let hipVsKnee = hipRange / max(kneeRange, 1)
+        let wristYTravel: Double = {
+            guard let mx = wristYs.max(), let mn = wristYs.min() else { return 0 }
+            return Double(mx - mn)
+        }()
+
+        // Movement floor: if nothing is really moving, the user is idle/standing.
+        if kneeRange < 12 && hipRange < 12 && wristYTravel < 0.05 {
+            return .unknown
+        }
+
+        // Squat: upright torso, knee drives the rep, hands stay roughly still.
+        let looksLikeSquat =
+            spineMean > 150 &&
+            kneeRange > 25 &&
+            hipVsKnee < 1.6 &&
+            wristYTravel < 0.10
+
+        // Deadlift: hip-hinge dominates, vertical hand sweep (bar path),
+        // torso allowed to incline forward at the bottom.
+        let looksLikeDeadlift =
+            hipRange > 25 &&
+            hipVsKnee > 1.4 &&
+            wristYTravel > 0.15
+
+        switch (looksLikeSquat, looksLikeDeadlift) {
+        case (true, false):  return .squat
+        case (false, true):  return .deadlift
+        case (true, true):
+            // Tie-break by hand travel — a real deadlift has a much bigger sweep.
+            return wristYTravel > 0.18 ? .deadlift : .squat
+        default:             return .unknown
+        }
+    }
+
+    private func meanY(_ a: CGPoint?, _ b: CGPoint?) -> CGFloat? {
+        switch (a, b) {
+        case let (l?, r?): return (l.y + r.y) / 2
+        case let (l?, nil): return l.y
+        case let (nil, r?): return r.y
+        default: return nil
+        }
     }
 }

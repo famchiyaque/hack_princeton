@@ -72,9 +72,11 @@ struct FormComparator {
                                      spineAngle: .init(min: 150, max: 180)),
         ],
         .deadlift: [
+            // Spine floor tightened to 155 — picks up mild rounding at the
+            // bottom (safety critical) without flagging a normal hip-hinge.
             "bottom": ReferenceFrame(kneeAngle:  .init(min: 110, max: 140),
                                      hipAngle:   .init(min: 70,  max: 110),
-                                     spineAngle: .init(min: 160, max: 180)),
+                                     spineAngle: .init(min: 155, max: 180)),
             "top":    ReferenceFrame(kneeAngle:  .init(min: 165, max: 180),
                                      hipAngle:   .init(min: 165, max: 180),
                                      spineAngle: .init(min: 165, max: 180)),

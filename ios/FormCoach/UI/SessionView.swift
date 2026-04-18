@@ -12,8 +12,11 @@ struct SessionView: View {
     @StateObject private var sessionMgr   = SessionManager()
     @StateObject private var audioCoach   = AudioCoach()
 
-    @State private var selectedExercise: ExerciseType = .squat
-    @State private var repCounter = RepCounter(exercise: .squat)
+    /// Exercise is detected live by `ExerciseClassifier`. No manual picker —
+    /// the classifier is the single source of truth and re-classifies whenever
+    /// the user switches movements (squat ↔ deadlift ↔ not recognized).
+    @State private var activeExercise: ExerciseType = .unknown
+    @State private var repCounter = RepCounter(exercise: .unknown)
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
@@ -80,24 +83,37 @@ struct SessionView: View {
                 poseDetector?.process(sampleBuffer: buf, orientation: orientation)
             }
             sessionMgr.startSession()
-            sessionMgr.selectExercise(selectedExercise)
-            if let line = scheduler.onExerciseStarted(selectedExercise) {
-                audioCoach.speak(line, priority: 9)
-            }
         }
         .onDisappear { camera.stop() }
         .onChange(of: poseDetector.currentPose) { _, pose in
             guard let pose, !isPaused else { return }
             processFrame(pose)
         }
-        .onChange(of: selectedExercise) { _, new in
-            repCounter = RepCounter(exercise: new)
-            repCount = 0
-            peakAngle = new.downThreshold
-            sessionMgr.selectExercise(new)
-            if let line = scheduler.onExerciseStarted(new) {
-                audioCoach.speak(line, priority: 9)
-            }
+        .onChange(of: classifier.detectedExercise) { _, new in
+            handleExerciseChange(to: new)
+        }
+    }
+
+    // MARK: - Exercise change handling
+
+    /// Fires when the classifier flips (sticky) to a new exercise label.
+    /// Unknown → silence audio + pause rep counting; squat/deadlift → rebuild
+    /// the RepCounter, reset per-exercise state, and speak the startup cue.
+    private func handleExerciseChange(to new: ExerciseType) {
+        activeExercise = new
+        repCounter = RepCounter(exercise: new)
+        repCount = 0
+        peakAngle = new.downThreshold
+        formResult = nil
+
+        if new == .unknown {
+            coachMessage = "Exercise not recognized — try squat or deadlift"
+            return
+        }
+
+        sessionMgr.selectExercise(new)
+        if let line = scheduler.onExerciseStarted(new) {
+            audioCoach.speak(line, priority: 9)
         }
     }
 
@@ -118,17 +134,33 @@ struct SessionView: View {
 
             Spacer()
 
-            let status = formStatus
-            HStack(spacing: 6) {
-                Circle().fill(status.color).frame(width: 8, height: 8)
-                Text("FORM: \(status.label)")
-                    .font(KineticFont.caption(11))
-                    .kerning(1.5)
-                    .foregroundStyle(.white)
+            VStack(spacing: 6) {
+                let ex = exerciseStatus
+                HStack(spacing: 6) {
+                    Image(systemName: ex.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(ex.color)
+                    Text("EXERCISE: \(ex.label)")
+                        .font(KineticFont.caption(11))
+                        .kerning(1.5)
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(ex.color.opacity(0.45), lineWidth: 1))
+
+                let status = formStatus
+                HStack(spacing: 6) {
+                    Circle().fill(status.color).frame(width: 8, height: 8)
+                    Text("FORM: \(status.label)")
+                        .font(KineticFont.caption(11))
+                        .kerning(1.5)
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(status.color.opacity(0.4), lineWidth: 1))
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(status.color.opacity(0.4), lineWidth: 1))
 
             Spacer()
 
@@ -242,8 +274,18 @@ struct SessionView: View {
 
     private func processFrame(_ pose: BodyPose) {
         let angles = BodyAngles.from(pose: pose)
-        let exercise = selectedExercise
+        // Always feed the classifier — that's how we detect live exercise
+        // switches (squat → deadlift) mid-session.
         classifier.update(angles: angles, pose: pose)
+
+        let exercise = activeExercise
+        // Unknown → no rep counting, no audio, no form scoring. The coach
+        // bubble already shows "Exercise not recognized" (set in
+        // handleExerciseChange). Just wait until the classifier confirms
+        // a real exercise.
+        guard exercise == .squat || exercise == .deadlift else {
+            return
+        }
 
         let (primaryAngle, phase): (Double?, String) = {
             switch exercise {
@@ -340,6 +382,22 @@ struct SessionView: View {
         if s > 55 { return ("OK",   KineticColor.warning) }
         if s > 0  { return ("FIX",  KineticColor.danger)  }
         return ("READY", KineticColor.textSecondary)
+    }
+
+    /// Pill label + color for the live classifier state. "DETECTING…" is shown
+    /// while we haven't confirmed a sticky label yet; once unknown is sticky,
+    /// we flip to "NOT RECOGNIZED" to make the demo's "walk away" state obvious.
+    private var exerciseStatus: (label: String, color: Color, icon: String) {
+        switch classifier.detectedExercise {
+        case .squat:
+            return ("SQUAT", KineticColor.success, "figure.cooldown")
+        case .deadlift:
+            return ("DEADLIFT", KineticColor.success, "figure.strengthtraining.functional")
+        case .unknown where classifier.isStable:
+            return ("NOT RECOGNIZED", KineticColor.danger, "questionmark")
+        default:
+            return ("DETECTING…", KineticColor.textSecondary, "sparkle.magnifyingglass")
+        }
     }
 
     private func formatted(_ seconds: Int) -> String {

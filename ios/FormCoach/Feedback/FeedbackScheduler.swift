@@ -55,6 +55,21 @@ final class FeedbackScheduler {
             currentRepFaults[key] = max(currentRepFaults[key] ?? 0, c.severity)
         }
 
+        // Injury-risk fast path: a rounding deadlift back is dangerous, so
+        // speak it immediately regardless of rep phase or mid-rep throttle.
+        // Still respects globalCooldown so we don't spam every frame.
+        if currentExercise == .deadlift,
+           let spineFault = result.corrections.first(where: { $0.joint == "spineAngle" }),
+           spineFault.severity >= 0.5,
+           canSpeak() {
+            let key = faultKey(exercise: currentExercise, correction: spineFault)
+            if let bank = Phrases.faults[key] {
+                let line = pick(from: bank)
+                markSpoken(line)
+                return line
+            }
+        }
+
         // One mid-rep cue per rep, only on the way down, only if severe
         guard !midRepCueFiredThisRep,
               repPhase == .goingDown,
@@ -190,6 +205,11 @@ private enum Phrases {
             "Hands to sky, feet wide on the jump. Go.",
             "Big jumps, arms all the way up. Begin.",
         ],
+        "deadlift": [
+            "Bar over midfoot. Flat back, chest proud. Pull.",
+            "Set your back, brace your core, then lift.",
+            "Shoulders over the bar, neutral spine. Go.",
+        ],
     ]
 
     static let genericStart: [String] = [
@@ -242,6 +262,23 @@ private enum Phrases {
             "Feet wider",
             "Bigger jumps out",
             "Wider stance on the jump",
+        ],
+        // Deadlift — spine faults are injury risks; wording is sharper.
+        "deadlift:spineAngle_low": [
+            "Flat back",
+            "Chest up, don't round",
+            "Brace hard, neutral spine",
+            "Back is rounding — reset",
+        ],
+        "deadlift:hipAngle_low": [
+            "Drive your hips through",
+            "Finish with the hips",
+            "Squeeze glutes at the top",
+        ],
+        "deadlift:kneeAngle_low": [
+            "Don't squat the pull — hinge",
+            "Hips back, not down",
+            "Push the floor away, hips lead",
         ],
     ]
 
