@@ -116,3 +116,30 @@ class InsightsResponse(BaseModel):
     byExercise: list[ExerciseStat]
     topCorrections: list[CorrectionCount]
     last7DaysMinutes: list[int]  # index 0 = 6 days ago, index 6 = today
+
+
+# ── Records ───────────────────────────────────────────────
+
+class ExerciseRecord(BaseModel):
+    exerciseId: str
+    bestScore: float
+    bestScoreDate: str
+    maxReps: int
+    maxRepsDate: str
+
+class RecordsResponse(BaseModel):
+    longestSessionMinutes: int
+    longestSessionDate: str
+    bestOverallScore: float
+    bestOverallScoreDate: str
+    byExercise: list[ExerciseRecord]
+
+
+# ── Analysis ──────────────────────────────────────────────
+
+class SessionSummaryRequest(BaseModel):
+    sessionId: str
+
+class SessionSummaryResponse(BaseModel):
+    sessionId: str
+    summary: str

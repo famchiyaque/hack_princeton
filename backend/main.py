@@ -22,7 +22,7 @@ load_dotenv("../.env")
 
 from database import engine, SessionLocal
 from models import Base
-from routers import exercises, sessions, users, insights
+from routers import exercises, sessions, users, insights, records, analysis
 import seed_data
 
 app = FastAPI(title="Kinetic API", version="1.0.0")
@@ -50,6 +50,8 @@ app.include_router(exercises.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
+app.include_router(records.router, prefix="/api")
+app.include_router(analysis.router, prefix="/api")
 
 
 @app.get("/api/health")
