@@ -146,11 +146,16 @@ struct DashboardView: View {
     }
 
     private var todaysProgram: String {
-        switch userStore.user.goal {
-        case "muscle": "Upper Body"
-        case "lose":   "HIIT & Cardio"
-        case "endure": "Endurance Flow"
-        default:       "Form Mastery"
+        let primary = userStore.user.goals.first ?? "athleticism"
+        switch primary {
+        case "bodybuilding", "muscle": return "Hypertrophy Block"
+        case "strength":     return "Strength Block"
+        case "longevity":    return "Longevity & Recovery"
+        case "fat_loss", "lose": return "Metabolic Circuit"
+        case "athleticism", "form", "endure": return "Athletic Conditioning"
+        case "aesthetic":    return "Sculpt & Define"
+        case "physical_rehab": return "Recovery & Rehab"
+        default:             return "Athletic Conditioning"
         }
     }
 

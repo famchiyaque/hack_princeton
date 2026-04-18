@@ -6,16 +6,85 @@ import SwiftUI
 struct LocalUser: Codable, Equatable {
     var id: String
     var name: String
-    var goal: String           // "muscle" | "lose" | "form" | "endure"
+    /// Training intent ids from onboarding, e.g. "bodybuilding", "strength", "fat_loss"
+    var goals: [String]
     var fitnessLevel: String   // "beginner" | "intermediate" | "advanced"
+    var weightLbs: Int
+    var heightFeet: Int        // imperial, feet portion (e.g. 5)
+    var heightInches: Int      // 0...11
+    var age: Int
+    var gender: String         // "male" | "female" | "non_binary" | "prefer_not_to_say"
     var healthNotes: [String]  // e.g. ["knee_pain", "lower_back"]
     var bodyGoals: [String]    // e.g. ["stronger_core", "better_posture"]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, fitnessLevel, healthNotes, bodyGoals, goals
+        case weightLbs, heightFeet, heightInches, age, gender
+        case legacyGoal = "goal"
+    }
+
+    init(id: String, name: String, goals: [String], fitnessLevel: String,
+         weightLbs: Int, heightFeet: Int, heightInches: Int, age: Int, gender: String,
+         healthNotes: [String], bodyGoals: [String]) {
+        self.id = id
+        self.name = name
+        self.goals = goals
+        self.fitnessLevel = fitnessLevel
+        self.weightLbs = weightLbs
+        self.heightFeet = heightFeet
+        self.heightInches = heightInches
+        self.age = age
+        self.gender = gender
+        self.healthNotes = healthNotes
+        self.bodyGoals = bodyGoals
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        fitnessLevel = try c.decode(String.self, forKey: .fitnessLevel)
+        weightLbs = try c.decodeIfPresent(Int.self, forKey: .weightLbs) ?? 175
+        heightFeet = try c.decodeIfPresent(Int.self, forKey: .heightFeet) ?? 5
+        heightInches = try c.decodeIfPresent(Int.self, forKey: .heightInches) ?? 10
+        age = try c.decodeIfPresent(Int.self, forKey: .age) ?? 30
+        gender = try c.decodeIfPresent(String.self, forKey: .gender) ?? "prefer_not_to_say"
+        healthNotes = try c.decode([String].self, forKey: .healthNotes)
+        bodyGoals = try c.decode([String].self, forKey: .bodyGoals)
+        if let arr = try c.decodeIfPresent([String].self, forKey: .goals), !arr.isEmpty {
+            goals = arr
+        } else if let legacy = try c.decodeIfPresent(String.self, forKey: .legacyGoal), !legacy.isEmpty {
+            goals = [legacy]
+        } else {
+            goals = ["athleticism"]
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(goals, forKey: .goals)
+        try c.encode(fitnessLevel, forKey: .fitnessLevel)
+        try c.encode(weightLbs, forKey: .weightLbs)
+        try c.encode(heightFeet, forKey: .heightFeet)
+        try c.encode(heightInches, forKey: .heightInches)
+        try c.encode(age, forKey: .age)
+        try c.encode(gender, forKey: .gender)
+        try c.encode(healthNotes, forKey: .healthNotes)
+        try c.encode(bodyGoals, forKey: .bodyGoals)
+    }
 
     static let empty = LocalUser(
         id: UUID().uuidString,
         name: "Athlete",
-        goal: "form",
+        goals: ["athleticism"],
         fitnessLevel: "beginner",
+        weightLbs: 175,
+        heightFeet: 5,
+        heightInches: 10,
+        age: 30,
+        gender: "prefer_not_to_say",
         healthNotes: [],
         bodyGoals: []
     )
@@ -51,11 +120,17 @@ final class UserStore: ObservableObject {
         persist()
     }
 
-    func completeOnboarding(goal: String, fitnessLevel: String,
+    func completeOnboarding(goals: [String], fitnessLevel: String,
+                            weightLbs: Int, heightFeet: Int, heightInches: Int, age: Int, gender: String,
                             healthNotes: [String], bodyGoals: [String]) {
         update {
-            $0.goal = goal
+            $0.goals = goals
             $0.fitnessLevel = fitnessLevel
+            $0.weightLbs = weightLbs
+            $0.heightFeet = heightFeet
+            $0.heightInches = heightInches
+            $0.age = age
+            $0.gender = gender
             $0.healthNotes = healthNotes
             $0.bodyGoals = bodyGoals
         }
@@ -75,8 +150,13 @@ final class UserStore: ObservableObject {
         let payload = UserPayload(
             id: user.id,
             name: user.name,
-            goal: user.goal,
+            goals: user.goals,
             fitnessLevel: user.fitnessLevel,
+            weightLbs: user.weightLbs,
+            heightFeet: user.heightFeet,
+            heightInches: user.heightInches,
+            age: user.age,
+            gender: user.gender,
             healthNotes: user.healthNotes,
             bodyGoals: user.bodyGoals
         )
