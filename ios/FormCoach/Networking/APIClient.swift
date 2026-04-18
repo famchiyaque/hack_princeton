@@ -61,6 +61,7 @@ final class APIClient {
     func createSession(_ payload: CreateSessionPayload) async throws -> APISession {
         var req = await authorizedRequest(url: url("/sessions"), method: "POST")
         req.httpBody = try encoder.encode(payload)
+        req.timeoutInterval = 6.0
         let (data, _) = try await session.data(for: req)
         return try decoder.decode(APISession.self, from: data)
     }

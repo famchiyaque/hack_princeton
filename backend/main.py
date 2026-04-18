@@ -13,6 +13,7 @@ NOTE on architecture:
  - No AI / LLM calls are made server-side. Session reports are
    computed deterministically by the iOS client (SessionAnalyzer.swift).
 """
+import asyncio
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +23,7 @@ load_dotenv("../.env")
 
 from database import engine, SessionLocal
 from models import Base
-from routers import exercises, sessions, users, insights, records, analysis
+from routers import exercises, sessions, users, insights, records, analysis, tts
 import seed_data
 
 app = FastAPI(title="Kinetic API", version="1.0.0")
@@ -37,13 +38,14 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         seed_data.seed(db)
     finally:
         db.close()
+    asyncio.create_task(tts.warm_cache())
 
 
 app.include_router(exercises.router, prefix="/api")
@@ -52,6 +54,7 @@ app.include_router(users.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
 app.include_router(records.router, prefix="/api")
 app.include_router(analysis.router, prefix="/api")
+app.include_router(tts.router, prefix="/api")
 
 
 @app.get("/api/health")

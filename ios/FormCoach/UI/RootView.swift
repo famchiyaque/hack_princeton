@@ -9,6 +9,19 @@ enum AppFlow {
     case main        // authenticated + onboarded
 }
 
+/// All possible states of the session full-screen flow. Wrapped in a single
+/// `fullScreenCover(item:)` so we never get mid-flight transitions where one
+/// sheet dismisses and another fails to re-present (the "black screen" bug).
+enum SessionStage: Identifiable {
+    case recording
+    case ending
+    case report(SessionReport)
+
+    /// Stable id for the whole lifecycle so SwiftUI treats every stage as the
+    /// same presented sheet and just re-renders the body.
+    var id: String { "session-stage" }
+}
+
 enum MainTab: String, CaseIterable {
     case home, workouts, insights, profile
 
@@ -37,9 +50,7 @@ struct RootView: View {
 
     @State private var flow: AppFlow = .loading
     @State private var selectedTab: MainTab = .home
-    @State private var showSession = false
-    @State private var showReport = false
-    @State private var lastReport: SessionReport?
+    @State private var sessionStage: SessionStage?
 
     var body: some View {
         ZStack {
@@ -71,15 +82,25 @@ struct RootView: View {
                 .transition(.move(edge: .trailing))
 
             case .onboarding:
-                OnboardingView(onComplete: { answers in
-                    userStore.completeOnboarding(
-                        goal: answers.goal,
-                        fitnessLevel: answers.fitnessLevel,
-                        healthNotes: answers.healthNotes,
-                        bodyGoals: answers.bodyGoals
-                    )
-                    withAnimation(.easeInOut) { flow = .main }
-                })
+                OnboardingView(
+                    onComplete: { answers in
+                        userStore.completeOnboarding(
+                            goals: answers.goals,
+                            fitnessLevel: answers.fitnessLevel,
+                            weightLbs: answers.weightLbs,
+                            heightFeet: answers.heightFeet,
+                            heightInches: answers.heightInches,
+                            age: answers.age,
+                            gender: answers.gender,
+                            healthNotes: answers.healthNotes,
+                            bodyGoals: answers.bodyGoals
+                        )
+                        withAnimation(.easeInOut) { flow = .main }
+                    },
+                    onBackToWelcome: {
+                        withAnimation(.easeInOut) { flow = .welcome }
+                    }
+                )
                 .transition(.move(edge: .trailing))
 
             case .main:
@@ -87,17 +108,16 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: flow)
-        .fullScreenCover(isPresented: $showSession) {
-            SessionView(onEnd: { report in
-                lastReport = report
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showReport = true
-                }
-            })
-        }
-        .fullScreenCover(isPresented: $showReport) {
-            if let report = lastReport {
-                ReportView(report: report, onDone: { showReport = false })
+        .fullScreenCover(item: $sessionStage) { stage in
+            // Body closure reads the binding — SwiftUI re-renders in place as
+            // the stage transitions recording → ending → report.
+            switch stage {
+            case .recording:
+                SessionView(stage: $sessionStage)
+            case .ending:
+                SessionEndingOverlay()
+            case .report(let report):
+                ReportView(report: report, onDone: { sessionStage = nil })
             }
         }
         .task {
@@ -159,7 +179,7 @@ struct RootView: View {
                 switch selectedTab {
                 case .home:
                     DashboardView(userStore: userStore,
-                                  onStartSession: { showSession = true })
+                                  onStartSession: { sessionStage = .recording })
                 case .workouts:
                     WorkoutsView(userStore: userStore)
                 case .insights:

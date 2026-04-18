@@ -26,6 +26,9 @@ struct SessionReport {
     let risks: [String]             // key risks / recurring issues
     let tempo: TempoAnalysis
     let consistency: Double         // 0–100, std-dev based
+
+    // Populated post-build by SessionView if the server sync failed.
+    var saveError: String? = nil
 }
 
 struct TempoAnalysis {

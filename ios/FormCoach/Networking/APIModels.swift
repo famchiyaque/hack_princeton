@@ -27,8 +27,13 @@ struct ExercisesResponse: Codable {
 
 struct UserPayload: Codable {
     let name: String
-    let goal: String
+    let goals: [String]
     let fitnessLevel: String
+    let weightLbs: Int
+    let heightFeet: Int
+    let heightInches: Int
+    let age: Int
+    let gender: String
     let healthNotes: [String]
     let bodyGoals: [String]
 }
@@ -37,8 +42,13 @@ struct APIUser: Codable, Identifiable {
     let id: String
     let email: String
     let name: String
-    let goal: String
+    let goals: [String]
     let fitnessLevel: String
+    let weightLbs: Int
+    let heightFeet: Int
+    let heightInches: Int
+    let age: Int
+    let gender: String
     let healthNotes: [String]
     let bodyGoals: [String]
     let createdAt: String

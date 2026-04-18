@@ -30,8 +30,13 @@ class ExercisesResponse(BaseModel):
 
 class UserIn(BaseModel):
     name: str = "Athlete"
-    goal: str = "form"
+    goals: list[str] = []
     fitnessLevel: str = "beginner"
+    weightLbs: int = 175
+    heightFeet: int = 5
+    heightInches: int = 10
+    age: int = 30
+    gender: str = "prefer_not_to_say"
     healthNotes: list[str] = []
     bodyGoals: list[str] = []
 
@@ -40,8 +45,13 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
-    goal: str
+    goals: list[str]
     fitnessLevel: str
+    weightLbs: int
+    heightFeet: int
+    heightInches: int
+    age: int
+    gender: str
     healthNotes: list[str]
     bodyGoals: list[str]
     createdAt: str
