@@ -209,7 +209,7 @@ struct OnboardingView: View {
     // MARK: - Option primitives
 
     private func gridOfOptions(_ options: [OnboardingOption],
-                                selected: (OnboardingOption) -> Bool,
+                                selected: @escaping (OnboardingOption) -> Bool,
                                 tap: @escaping (OnboardingOption) -> Void) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
                             GridItem(.flexible())], spacing: 12) {
