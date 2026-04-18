@@ -17,11 +17,12 @@ final class JointSmoother {
     /// EMA weight on the new sample. Higher = faster response, less smoothing.
     private let alpha: CGFloat = 0.5
     /// Minimum confidence required to accept a joint sample.
-    private let minConfidence: Float = 0.5
+    /// Kept loose; outlier rejection below handles the noisy ones.
+    private let minConfidence: Float = 0.3
     /// Max allowed per-frame jump in normalized (0-1) coords. Beyond this, sample is rejected.
-    private let maxJump: CGFloat = 0.18
+    private let maxJump: CGFloat = 0.22
     /// Drop cached joints that haven't been updated within this window.
-    private let staleAfter: TimeInterval = 0.3
+    private let staleAfter: TimeInterval = 0.35
 
     func smooth(
         raw: [VNHumanBodyPoseObservation.JointName: CGPoint],

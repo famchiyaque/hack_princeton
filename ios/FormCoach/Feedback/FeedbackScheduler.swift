@@ -15,9 +15,11 @@ final class FeedbackScheduler {
 
     private let globalCooldown: TimeInterval = 3.5
     private let encouragementCooldown: TimeInterval = 15
-    private let encouragementEveryNReps = 5
-    private let midRepSeverityThreshold: Double = 0.8
-    private let postRepSeverityThreshold: Double = 0.5
+    private let encouragementEveryNReps = 3
+    /// Lowered from 0.8 so we actually cue common descent faults (0.8 is rare
+    /// in practice — the user went a full minute without any audio).
+    private let midRepSeverityThreshold: Double = 0.6
+    private let postRepSeverityThreshold: Double = 0.45
     private let recentPhrasesMemory = 2   // don't repeat the last N spoken phrases
 
     // MARK: - State
@@ -29,6 +31,7 @@ final class FeedbackScheduler {
     private var consecutiveGoodReps: Int = 0
     private var midRepCueFiredThisRep: Bool = false
     private var currentExercise: ExerciseType = .unknown
+    private var repsCompleted: Int = 0
 
     // MARK: - Public events
 
@@ -38,6 +41,7 @@ final class FeedbackScheduler {
         currentExercise = exercise
         resetRepState()
         consecutiveGoodReps = 0
+        repsCompleted = 0
         let line = pick(from: Phrases.startup[exercise.rawValue] ?? Phrases.genericStart)
         markSpoken(line)
         return line
@@ -71,7 +75,14 @@ final class FeedbackScheduler {
     /// Called when RepCounter reports a rep just completed.
     /// Returns post-rep critique, encouragement, or nil (silence).
     func onRepCompleted(score: Double) -> String? {
-        defer { resetRepState() }
+        defer { resetRepState(); repsCompleted += 1 }
+
+        // First rep always gets acknowledged so the user knows audio is alive.
+        if repsCompleted == 0, canSpeak() {
+            let line = "One rep in the books"
+            markSpoken(line)
+            return line
+        }
 
         // Identify worst accumulated fault this rep
         if let (worstKey, worstSev) = currentRepFaults.max(by: { $0.value < $1.value }),

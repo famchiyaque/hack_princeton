@@ -75,9 +75,9 @@ struct SessionView: View {
         .onAppear {
             audioCoach.prefetch()  // download all ElevenLabs phrase audio in background
             camera.requestPermission()
-            camera.onFrame = { [weak poseDetector] buf in
+            camera.onFrame = { [weak poseDetector] buf, orientation in
                 guard !isPaused else { return }
-                poseDetector?.process(sampleBuffer: buf)
+                poseDetector?.process(sampleBuffer: buf, orientation: orientation)
             }
             sessionMgr.startSession()
             sessionMgr.selectExercise(selectedExercise)

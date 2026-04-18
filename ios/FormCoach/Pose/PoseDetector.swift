@@ -1,6 +1,7 @@
 import Vision
 import AVFoundation
 import Combine
+import ImageIO
 
 final class PoseDetector: ObservableObject {
     @Published var currentPose: BodyPose?
@@ -9,13 +10,18 @@ final class PoseDetector: ObservableObject {
     private let request = VNDetectHumanBodyPoseRequest()
 
     /// Minimum confidence required to include a joint in the raw frame.
-    /// Lower-confidence points are discarded before smoothing to prevent phantom
-    /// positions from polluting the EMA.
-    private let minJointConfidence: Float = 0.5
+    /// Kept deliberately loose — the smoother's outlier rejection + EMA
+    /// handles noise better than an aggressive upfront filter, and a high
+    /// threshold strangles full-body poses where Vision confidence dips.
+    private let minJointConfidence: Float = 0.3
 
-    func process(sampleBuffer: CMSampleBuffer) {
+    func process(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+        let handler = VNImageRequestHandler(
+            cvPixelBuffer: pixelBuffer,
+            orientation: orientation,
+            options: [:]
+        )
         do {
             try handler.perform([request])
             guard let observation = request.results?.first else {

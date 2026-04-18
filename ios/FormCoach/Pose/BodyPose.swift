@@ -6,7 +6,7 @@ struct BodyPose: Equatable {
     let confidences: [VNHumanBodyPoseObservation.JointName: Float]
     let timestamp: TimeInterval
 
-    func point(for joint: VNHumanBodyPoseObservation.JointName, minConfidence: Float = 0.5) -> CGPoint? {
+    func point(for joint: VNHumanBodyPoseObservation.JointName, minConfidence: Float = 0.3) -> CGPoint? {
         guard let confidence = confidences[joint], confidence >= minConfidence else { return nil }
         return joints[joint]
     }

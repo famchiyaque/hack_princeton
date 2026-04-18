@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import ImageIO
 
 final class CameraManager: NSObject, ObservableObject {
     let captureSession = AVCaptureSession()
@@ -7,12 +8,22 @@ final class CameraManager: NSObject, ObservableObject {
     @Published var isRunning = false
     @Published var permissionGranted = false
 
-    var onFrame: ((CMSampleBuffer) -> Void)?
+    /// Delivers each video frame along with the orientation Vision should use
+    /// to interpret it. The buffer itself is in the sensor's native landscape
+    /// layout — Vision needs the orientation hint to return coords in the
+    /// portrait space we actually display.
+    var onFrame: ((CMSampleBuffer, CGImagePropertyOrientation) -> Void)?
 
     private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "com.formcoach.camera.session", qos: .userInitiated)
     private let outputQueue = DispatchQueue(label: "com.formcoach.camera.output", qos: .userInitiated)
     private var currentPosition: AVCaptureDevice.Position = .back
+
+    /// Orientation Vision needs to correctly interpret the buffer.
+    /// Assumes portrait device orientation (which is locked elsewhere).
+    private var visionOrientation: CGImagePropertyOrientation {
+        currentPosition == .front ? .leftMirrored : .right
+    }
 
     func requestPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -89,6 +100,6 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        onFrame?(sampleBuffer)
+        onFrame?(sampleBuffer, visionOrientation)
     }
 }

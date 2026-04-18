@@ -1,8 +1,11 @@
 import AVFoundation
+import os
 
 // Change to your Mac's LAN IP when testing on a physical device.
 // e.g. "http://192.168.1.42:8000"
 private let backendBase = "http://localhost:8000"
+
+private let log = Logger(subsystem: "com.formcoach", category: "AudioCoach")
 
 final class AudioCoach: NSObject, ObservableObject {
 
@@ -22,6 +25,12 @@ final class AudioCoach: NSObject, ObservableObject {
 
     private var queue: [(message: String, priority: Int)] = []
     private var isSpeaking = false
+
+    /// Hard ceiling on how long a single utterance can block the queue. If the
+    /// player never reports finish (e.g. audio session was stolen by camera
+    /// activation), this watchdog clears `isSpeaking` and drains the next item.
+    private let utteranceWatchdog: TimeInterval = 8.0
+    private var watchdogWork: DispatchWorkItem?
 
     override init() {
         super.init()
@@ -59,6 +68,7 @@ final class AudioCoach: NSObject, ObservableObject {
     // MARK: - Public API
 
     func speak(_ message: String, priority: Int = 5) {
+        log.debug("speak(priority:\(priority, privacy: .public)) \(message, privacy: .public)")
         enqueue(message, priority: priority)
     }
 
@@ -68,6 +78,7 @@ final class AudioCoach: NSObject, ObservableObject {
         audioPlayer = nil
         queue.removeAll()
         isSpeaking = false
+        cancelWatchdog()
     }
 
     // MARK: - Private
@@ -83,27 +94,35 @@ final class AudioCoach: NSObject, ObservableObject {
 
         queue.removeFirst()
         isSpeaking = true
+        armWatchdog()
 
         if let cachedData = audioCache[next.message] {
-            // Instant playback from prefetched cache
-            playMP3(cachedData)
+            playMP3(cachedData, fallbackText: next.message)
         } else if cacheReady {
-            // Unknown phrase (dynamic fallback text) — fetch on-demand, then local TTS while waiting
             fetchAndPlay(next.message)
         } else {
-            // Cache not ready yet (e.g. session started before bundle downloaded)
             speakLocally(next.message)
         }
     }
 
-    private func playMP3(_ data: Data) {
+    private func playMP3(_ data: Data, fallbackText: String) {
+        // Re-activate the audio session right before playing — the camera
+        // startup can yank it away silently on first launch.
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
+
         guard let player = try? AVAudioPlayer(data: data) else {
-            isSpeaking = false
+            log.warning("AVAudioPlayer init failed, falling back to local TTS")
+            speakLocally(fallbackText)
             return
         }
         audioPlayer = player
         player.delegate = self
-        player.play()
+        let started = player.prepareToPlay() && player.play()
+        if !started {
+            log.warning("AVAudioPlayer.play() returned false, falling back to local TTS")
+            audioPlayer = nil
+            speakLocally(fallbackText)
+        }
     }
 
     /// On-demand fetch for phrases not in the pre-cached bundle (dynamic fallback strings).
@@ -125,7 +144,7 @@ final class AudioCoach: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 if let data, error == nil {
                     self.audioCache[text] = data  // cache for next time
-                    self.playMP3(data)
+                    self.playMP3(data, fallbackText: text)
                 } else {
                     self.speakLocally(text)
                 }
@@ -134,6 +153,7 @@ final class AudioCoach: NSObject, ObservableObject {
     }
 
     private func speakLocally(_ text: String) {
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = localVoice
         utterance.rate  = 0.48
@@ -141,8 +161,41 @@ final class AudioCoach: NSObject, ObservableObject {
     }
 
     private func configureAudioSession() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // `.spokenAudio` mode is optimized for short utterances and plays
+        // nicely next to AVCaptureSession. `.mixWithOthers` prevents the
+        // session from being deactivated underneath us.
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.duckOthers, .mixWithOthers]
+            )
+            try session.setActive(true, options: [])
+        } catch {
+            log.error("audio session setup failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    // MARK: - Watchdog — recovers if a player delegate never fires.
+
+    private func armWatchdog() {
+        cancelWatchdog()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isSpeaking else { return }
+            log.warning("utterance watchdog fired — forcing queue drain")
+            self.audioPlayer?.stop()
+            self.audioPlayer = nil
+            self.isSpeaking = false
+            self.drainQueue()
+        }
+        watchdogWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + utteranceWatchdog, execute: work)
+    }
+
+    private func cancelWatchdog() {
+        watchdogWork?.cancel()
+        watchdogWork = nil
     }
 }
 
@@ -150,6 +203,13 @@ final class AudioCoach: NSObject, ObservableObject {
 extension AudioCoach: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         isSpeaking = false
+        cancelWatchdog()
+        drainQueue()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        isSpeaking = false
+        cancelWatchdog()
         drainQueue()
     }
 }
@@ -159,6 +219,16 @@ extension AudioCoach: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async { [weak self] in
             self?.isSpeaking = false
+            self?.cancelWatchdog()
+            self?.drainQueue()
+        }
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            log.warning("AVAudioPlayer decode error: \(String(describing: error), privacy: .public)")
+            self?.isSpeaking = false
+            self?.cancelWatchdog()
             self?.drainQueue()
         }
     }
