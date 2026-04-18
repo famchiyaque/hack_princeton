@@ -4,24 +4,85 @@ struct ReportView: View {
     let report: SessionReport
     var onDone: () -> Void
 
+    @State private var saveErrorDismissed: Bool = false
+
     var body: some View {
         ZStack {
             KineticColor.bgDark.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 20) {
+                    if let err = report.saveError, !saveErrorDismissed {
+                        saveErrorBanner(message: err)
+                    }
                     header
                     statCards
                     tempoCard
                     strengthsSection
                     risksSection
                     precisionGraph
+                    aiCoachPlaceholder
                     actions
                     Color.clear.frame(height: 80)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
             }
+        }
+    }
+
+    // MARK: - Save-error banner
+
+    private func saveErrorBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(KineticColor.warning)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn't sync to server")
+                    .font(KineticFont.heading(14))
+                    .foregroundStyle(.white)
+                Text("\(message). Showing local stats only.")
+                    .font(KineticFont.body(12))
+                    .foregroundStyle(KineticColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { saveErrorDismissed = true }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+                    .background(.white.opacity(0.08), in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(KineticColor.warning.opacity(0.14))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(KineticColor.warning.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    // MARK: - AI Coach placeholder (Phase 2 attachment point)
+
+    private var aiCoachPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("AI COACH REVIEW")
+                .font(KineticFont.caption(10)).kerning(2)
+                .foregroundStyle(KineticColor.textSecondary)
+
+            AICoachPlaceholderCard()
+                .allowsHitTesting(false)
         }
     }
 
@@ -275,5 +336,65 @@ struct ReportView: View {
     private func formatDuration(_ seconds: Int) -> String {
         if seconds >= 60 { return "\(seconds / 60)m \(seconds % 60)s" }
         return "\(seconds)s"
+    }
+}
+
+// MARK: - AI Coach placeholder card
+
+/// Dormant card that holds the seat for the Phase-2 AI session summary.
+/// Visual only; non-interactive. A slow gradient sweep signals "pending future".
+private struct AICoachPlaceholderCard: View {
+    @State private var shimmer: CGFloat = -1
+
+    var body: some View {
+        GlassCard(padding: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(KineticColor.orangeSoft)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(KineticColor.orange)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Deeper analysis from your AI coach")
+                        .font(KineticFont.heading(15))
+                        .foregroundStyle(.white)
+                    Text("Coming soon — tailored insights on your technique, pacing, and next focus.")
+                        .font(KineticFont.body(12))
+                        .foregroundStyle(KineticColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .overlay(shimmerOverlay)
+        .mask(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: false)) {
+                shimmer = 1.6
+            }
+        }
+    }
+
+    private var shimmerOverlay: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            LinearGradient(
+                colors: [
+                    .clear,
+                    KineticColor.orange.opacity(0.18),
+                    .clear
+                ],
+                startPoint: .leading, endPoint: .trailing
+            )
+            .frame(width: w * 0.6)
+            .offset(x: w * shimmer)
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+        }
     }
 }

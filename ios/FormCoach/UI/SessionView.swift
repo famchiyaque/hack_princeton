@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct SessionView: View {
-    var onEnd: (SessionReport) -> Void = { _ in }
+    /// Drives the whole session flow (recording → ending → report → dismissed).
+    /// Binding rather than callback so the view drives its own transitions
+    /// without racing against a parent `.dismiss()`.
+    @Binding var stage: SessionStage?
 
     @StateObject private var camera       = CameraManager()
     @StateObject private var poseDetector = PoseDetector()
@@ -22,7 +25,6 @@ struct SessionView: View {
     // Tracks the extreme of the primary angle during current rep for the report.
     @State private var peakAngle: Double = 0
 
-    @Environment(\.dismiss) private var dismiss
     private let comparator = FormComparator()
     @State private var scheduler = FeedbackScheduler()
 
@@ -130,7 +132,13 @@ struct SessionView: View {
 
             Spacer()
 
-            Button { dismiss() } label: {
+            Button {
+                // Explicit quit: tear down and close the whole flow — skips
+                // the report because the user hasn't produced a complete session.
+                audioCoach.stop()
+                camera.stop()
+                stage = nil
+            } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
@@ -304,13 +312,23 @@ struct SessionView: View {
     }
 
     private func endSession() {
-        Task {
-            let report = sessionMgr.buildReport()
-            await sessionMgr.endSession()
-            audioCoach.stop()
-            camera.stop()
-            onEnd(report)
-            dismiss()
+        // 1) Freeze the on-device report immediately — we never depend on the
+        //    network to show the user their stats.
+        var report = sessionMgr.buildReport()
+
+        // 2) Tear down audio + camera up front so the ending overlay is calm.
+        audioCoach.stop()
+        camera.stop()
+
+        // 3) Flip to the ending overlay; SwiftUI swaps the body in place.
+        stage = .ending
+
+        // 4) Best-effort backend sync, then unconditionally route to the
+        //    report screen. Even on timeout/error we surface a banner there.
+        Task { @MainActor in
+            let result = await sessionMgr.endSession()
+            report.saveError = result.saveError
+            stage = .report(report)
         }
     }
 

@@ -52,6 +52,7 @@ final class APIClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try encoder.encode(payload)
+        req.timeoutInterval = 6.0
         let (data, _) = try await session.data(for: req)
         return try decoder.decode(APISession.self, from: data)
     }

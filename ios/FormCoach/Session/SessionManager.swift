@@ -1,6 +1,13 @@
 import Foundation
 import Combine
 
+// MARK: - Session end result
+
+struct SessionEndResult {
+    let sessionId: String?         // nil if backend save failed
+    let saveError: String?         // human-readable reason, nil on success
+}
+
 // MARK: - Internal session state
 
 struct WorkoutExercise {
@@ -79,12 +86,13 @@ final class SessionManager: ObservableObject {
         )
     }
 
-    func endSession() async {
+    func endSession() async -> SessionEndResult {
         timer?.cancel()
         isActive = false
         if let active = activeExercise { completedExercises.append(active) }
-        await postToBackend()
+        let result = await postToBackend()
         reset()
+        return result
     }
 
     func reset() {
@@ -98,8 +106,10 @@ final class SessionManager: ObservableObject {
 
     // MARK: - Backend sync
 
-    private func postToBackend() async {
-        guard let start = sessionStart else { return }
+    private func postToBackend() async -> SessionEndResult {
+        guard let start = sessionStart else {
+            return SessionEndResult(sessionId: nil, saveError: "Session had no start time")
+        }
         let userId = await UserStore.shared.user.id
 
         let exercises = completedExercises.map { ex in
@@ -117,6 +127,24 @@ final class SessionManager: ObservableObject {
             totalDuration: elapsedSeconds,
             startedAt: ISO8601DateFormatter().string(from: start)
         )
-        _ = try? await APIClient.shared.createSession(payload)
+        do {
+            let saved = try await APIClient.shared.createSession(payload)
+            return SessionEndResult(sessionId: saved.id, saveError: nil)
+        } catch {
+            let message: String
+            if let urlErr = error as? URLError {
+                switch urlErr.code {
+                case .timedOut:         message = "Server took too long to respond"
+                case .notConnectedToInternet, .networkConnectionLost:
+                                        message = "No network connection"
+                case .cannotConnectToHost, .cannotFindHost:
+                                        message = "Couldn't reach the server"
+                default:                message = "Network error (\(urlErr.code.rawValue))"
+                }
+            } else {
+                message = "Sync failed: \(error.localizedDescription)"
+            }
+            return SessionEndResult(sessionId: nil, saveError: message)
+        }
     }
 }
