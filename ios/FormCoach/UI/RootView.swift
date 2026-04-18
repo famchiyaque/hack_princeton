@@ -45,15 +45,25 @@ struct RootView: View {
                 .transition(.opacity)
 
             case .onboarding:
-                OnboardingView(onComplete: { answers in
-                    userStore.completeOnboarding(
-                        goal: answers.goal,
-                        fitnessLevel: answers.fitnessLevel,
-                        healthNotes: answers.healthNotes,
-                        bodyGoals: answers.bodyGoals
-                    )
-                    withAnimation(.easeInOut) { flow = .main }
-                })
+                OnboardingView(
+                    onComplete: { answers in
+                        userStore.completeOnboarding(
+                            goals: answers.goals,
+                            fitnessLevel: answers.fitnessLevel,
+                            weightLbs: answers.weightLbs,
+                            heightFeet: answers.heightFeet,
+                            heightInches: answers.heightInches,
+                            age: answers.age,
+                            gender: answers.gender,
+                            healthNotes: answers.healthNotes,
+                            bodyGoals: answers.bodyGoals
+                        )
+                        withAnimation(.easeInOut) { flow = .main }
+                    },
+                    onBackToWelcome: {
+                        withAnimation(.easeInOut) { flow = .welcome }
+                    }
+                )
                 .transition(.move(edge: .trailing))
 
             case .main:

@@ -21,10 +21,17 @@ class User(Base):
 
     id = Column(String, primary_key=True, default=new_id)
     name = Column(String, default="Athlete")
-    # Goal picked during onboarding: "muscle" | "lose" | "form" | "endure"
-    goal = Column(String, default="form")
+    # Legacy single goal; kept in sync with first entry in `goals` for old rows / tools
+    goal = Column(String, default="athleticism")
+    # All training intents from onboarding, e.g. ["bodybuilding", "fat_loss"]
+    goals = Column(JSON, default=list)
     # "beginner" | "intermediate" | "advanced"
     fitness_level = Column(String, default="beginner")
+    weight_lbs = Column(Integer, default=175)
+    height_feet = Column(Integer, default=5)
+    height_inches = Column(Integer, default=10)
+    age = Column(Integer, default=30)
+    gender = Column(String, default="prefer_not_to_say")
     # Free-form list of health notes from onboarding
     health_notes = Column(JSON, default=list)
     # Body goals like "stronger_core", "better_posture", etc.

@@ -91,8 +91,11 @@ struct ProfileView: View {
                     .foregroundStyle(KineticColor.textSecondary)
                 HStack {
                     Image(systemName: "target").foregroundStyle(KineticColor.orange)
-                    Text("Primary: \(goalDisplay)")
+                    Text("Fitness focus")
                         .font(KineticFont.body(14)).foregroundStyle(.white)
+                }
+                if !userStore.user.goals.isEmpty {
+                    WrappedChips(items: userStore.user.goals.map(fitnessGoalLabel))
                 }
                 if !userStore.user.bodyGoals.isEmpty {
                     WrappedChips(items: userStore.user.bodyGoals.map(bodyGoalLabel))
@@ -171,13 +174,21 @@ struct ProfileView: View {
 
     // MARK: - Labels
 
-    private var goalDisplay: String {
-        switch userStore.user.goal {
+    private func fitnessGoalLabel(_ id: String) -> String {
+        switch id {
+        case "bodybuilding": "Bodybuilding"
+        case "strength":     "Strength"
+        case "longevity":    "Longevity"
+        case "fat_loss":     "Fat Loss"
+        case "athleticism":  "Athleticism"
+        case "aesthetic":    "Aesthetic"
+        case "physical_rehab": "Physical Rehab"
+        // Legacy onboarding ids
         case "muscle": "Build Muscle"
         case "lose":   "Lose Weight"
         case "form":   "Improve Form"
         case "endure": "Endurance"
-        default:       "Improve Form"
+        default: id.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 

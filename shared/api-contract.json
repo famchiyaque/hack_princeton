@@ -2,7 +2,7 @@
   "info": {
     "title": "Kinetic API",
     "description": "Backend endpoints for user profiles, exercise reference data, session history, and aggregated insights. All real-time form analysis runs on-device.",
-    "version": "1.1.0"
+    "version": "1.3.0"
   },
   "baseURL": "http://localhost:8000/api",
   "endpoints": {
@@ -22,20 +22,26 @@
       "body": {
         "id": "uuid-or-blank",
         "name": "Alex",
-        "goal": "form",
+        "goals": ["athleticism"],
         "fitnessLevel": "beginner",
+        "weightLbs": 175,
+        "heightFeet": 5,
+        "heightInches": 10,
+        "age": 30,
+        "gender": "prefer_not_to_say",
         "healthNotes": ["knee_pain"],
         "bodyGoals": ["stronger_core", "better_posture"]
       },
       "response": {
-        "id": "", "name": "", "goal": "", "fitnessLevel": "",
+        "id": "", "name": "", "goals": [], "fitnessLevel": "",
+        "weightLbs": 175, "heightFeet": 5, "heightInches": 10, "age": 30, "gender": "",
         "healthNotes": [], "bodyGoals": [], "createdAt": ""
       }
     },
     "getUser": {
       "method": "GET",
       "path": "/users/:id",
-      "response": { "id": "", "name": "", "goal": "", "fitnessLevel": "", "healthNotes": [], "bodyGoals": [], "createdAt": "" }
+      "response": { "id": "", "name": "", "goals": [], "fitnessLevel": "", "weightLbs": 175, "heightFeet": 5, "heightInches": 10, "age": 30, "gender": "", "healthNotes": [], "bodyGoals": [], "createdAt": "" }
     },
     "createSession": {
       "method": "POST",
