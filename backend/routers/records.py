@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session as DBSession
 from database import get_db
 from models import Session, SessionExercise
 from schemas import RecordsResponse, ExerciseRecord
+from auth import get_current_user
 
 router = APIRouter(prefix="/records", tags=["records"])
 
 
-@router.get("/{user_id}", response_model=RecordsResponse)
-def user_records(user_id: str, db: DBSession = Depends(get_db)):
+@router.get("", response_model=RecordsResponse)
+def user_records(
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    user_id = current_user["user_id"]
     sessions = db.query(Session).filter(Session.user_id == user_id).all()
 
     longest_minutes = 0

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session as DBSession
 from database import get_db
 from models import Session, Exercise
 from schemas import SessionSummaryRequest, SessionSummaryResponse, CorrectionCount
+from auth import get_current_user
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -33,10 +34,16 @@ def _build_prompt(session: Session, exercises_map: dict[str, str]) -> str:
 
 
 @router.post("/session-summary", response_model=SessionSummaryResponse)
-def session_summary(body: SessionSummaryRequest, db: DBSession = Depends(get_db)):
+def session_summary(
+    body: SessionSummaryRequest,
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
     session = db.query(Session).filter(Session.id == body.sessionId).first()
     if not session:
         raise HTTPException(404, "Session not found")
+    if session.user_id != current_user["user_id"]:
+        raise HTTPException(403, "Not your session")
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:

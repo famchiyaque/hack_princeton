@@ -100,8 +100,6 @@ final class SessionManager: ObservableObject {
 
     private func postToBackend() async {
         guard let start = sessionStart else { return }
-        let userId = await UserStore.shared.user.id
-
         let exercises = completedExercises.map { ex in
             SessionExercisePayload(
                 exerciseId: ex.exerciseId,
@@ -112,7 +110,6 @@ final class SessionManager: ObservableObject {
             )
         }
         let payload = CreateSessionPayload(
-            userId: userId,
             exercises: exercises,
             totalDuration: elapsedSeconds,
             startedAt: ISO8601DateFormatter().string(from: start)

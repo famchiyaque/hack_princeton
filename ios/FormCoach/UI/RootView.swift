@@ -1,7 +1,12 @@
 import SwiftUI
 
 enum AppFlow {
-    case welcome, onboarding, main
+    case loading     // checking persisted auth session on launch
+    case welcome     // not authenticated
+    case login       // email/password login form
+    case signup      // email/password signup form
+    case onboarding  // first-time profile setup (post-auth)
+    case main        // authenticated + onboarded
 }
 
 enum MainTab: String, CaseIterable {
@@ -28,8 +33,9 @@ enum MainTab: String, CaseIterable {
 
 struct RootView: View {
     @StateObject private var userStore = UserStore.shared
+    @StateObject private var authManager = AuthManager.shared
 
-    @State private var flow: AppFlow = .welcome
+    @State private var flow: AppFlow = .loading
     @State private var selectedTab: MainTab = .home
     @State private var showSession = false
     @State private var showReport = false
@@ -38,11 +44,31 @@ struct RootView: View {
     var body: some View {
         ZStack {
             switch flow {
+            case .loading:
+                loadingView
+
             case .welcome:
-                WelcomeView(onGetStarted: {
-                    flow = userStore.hasOnboarded ? .main : .onboarding
-                })
+                WelcomeView(
+                    onGetStarted: { withAnimation(.easeInOut) { flow = .signup } },
+                    onSignIn: { withAnimation(.easeInOut) { flow = .login } }
+                )
                 .transition(.opacity)
+
+            case .login:
+                LoginView(
+                    onSuccess: { handleAuthSuccess() },
+                    onSwitchToSignUp: { withAnimation(.easeInOut) { flow = .signup } },
+                    onBack: { withAnimation(.easeInOut) { flow = .welcome } }
+                )
+                .transition(.move(edge: .trailing))
+
+            case .signup:
+                SignUpView(
+                    onSuccess: { handleAuthSuccess() },
+                    onSwitchToLogin: { withAnimation(.easeInOut) { flow = .login } },
+                    onBack: { withAnimation(.easeInOut) { flow = .welcome } }
+                )
+                .transition(.move(edge: .trailing))
 
             case .onboarding:
                 OnboardingView(onComplete: { answers in
@@ -72,6 +98,55 @@ struct RootView: View {
         .fullScreenCover(isPresented: $showReport) {
             if let report = lastReport {
                 ReportView(report: report, onDone: { showReport = false })
+            }
+        }
+        .task {
+            await authManager.restoreSession()
+            if authManager.isAuthenticated {
+                userStore.bindToAuthUser(
+                    id: authManager.userId!,
+                    email: authManager.userEmail ?? ""
+                )
+                flow = userStore.hasOnboarded ? .main : .onboarding
+            } else {
+                flow = .welcome
+            }
+        }
+        .onChange(of: authManager.session == nil) { _, isNil in
+            if isNil { flow = .welcome }
+        }
+    }
+
+    // MARK: - Auth success handler
+
+    private func handleAuthSuccess() {
+        guard let userId = authManager.userId else { return }
+        userStore.bindToAuthUser(id: userId, email: authManager.userEmail ?? "")
+
+        Task {
+            let backendUser = try? await APIClient.shared.getMe()
+            let isNewUser = backendUser == nil || backendUser?.goal == "form" && !userStore.hasOnboarded
+            withAnimation(.easeInOut) {
+                flow = isNewUser ? .onboarding : .main
+            }
+            if let existing = backendUser, existing.goal != "form" {
+                userStore.hydrateFromBackend(existing)
+            }
+        }
+    }
+
+    // MARK: - Loading
+
+    private var loadingView: some View {
+        ZStack {
+            KineticColor.bgDark.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Text("KINETIC")
+                    .font(KineticFont.display(34))
+                    .kerning(6)
+                    .foregroundStyle(.white)
+                ProgressView()
+                    .tint(KineticColor.orange)
             }
         }
     }

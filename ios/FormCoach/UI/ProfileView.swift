@@ -156,6 +156,20 @@ struct ProfileView: View {
                 }
             }
 
+            Button {
+                Task {
+                    try? await AuthManager.shared.signOut()
+                    userStore.logout()
+                }
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(KineticFont.body(13))
+                    .foregroundStyle(KineticColor.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            }
+
             Button(role: .destructive) {
                 showResetConfirm = true
             } label: {

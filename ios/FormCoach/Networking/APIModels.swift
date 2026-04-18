@@ -26,7 +26,6 @@ struct ExercisesResponse: Codable {
 // MARK: - Users
 
 struct UserPayload: Codable {
-    let id: String
     let name: String
     let goal: String
     let fitnessLevel: String
@@ -36,6 +35,7 @@ struct UserPayload: Codable {
 
 struct APIUser: Codable, Identifiable {
     let id: String
+    let email: String
     let name: String
     let goal: String
     let fitnessLevel: String
@@ -60,7 +60,6 @@ struct SessionExercisePayload: Codable {
 }
 
 struct CreateSessionPayload: Codable {
-    let userId: String
     let exercises: [SessionExercisePayload]
     let totalDuration: Int
     let startedAt: String

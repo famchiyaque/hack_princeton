@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session as DBSession
 from database import get_db
 from models import Session, SessionExercise
 from schemas import CreateSessionBody, SessionOut, SessionsResponse, SessionExerciseOut, CorrectionCount
+from auth import get_current_user
 from datetime import datetime, timezone
 import uuid
 
@@ -33,13 +34,17 @@ def _session_to_out(s: Session) -> SessionOut:
 
 
 @router.post("", response_model=SessionOut, status_code=201)
-def create_session(body: CreateSessionBody, db: DBSession = Depends(get_db)):
+def create_session(
+    body: CreateSessionBody,
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
     session_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
     session = Session(
         id=session_id,
-        user_id=body.userId,
+        user_id=current_user["user_id"],
         total_duration=body.totalDuration,
         started_at=body.startedAt or now,
         created_at=now,
@@ -64,29 +69,42 @@ def create_session(body: CreateSessionBody, db: DBSession = Depends(get_db)):
 
 @router.get("", response_model=SessionsResponse)
 def list_sessions(
-    userId: str = "anonymous",
     limit: int = 20,
     offset: int = 0,
+    current_user: dict = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
-    query = db.query(Session).filter(Session.user_id == userId)
+    user_id = current_user["user_id"]
+    query = db.query(Session).filter(Session.user_id == user_id)
     total = query.count()
     sessions = query.order_by(Session.created_at.desc()).offset(offset).limit(limit).all()
     return SessionsResponse(sessions=[_session_to_out(s) for s in sessions], total=total)
 
 
 @router.get("/{session_id}", response_model=SessionOut)
-def get_session(session_id: str, db: DBSession = Depends(get_db)):
+def get_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
     s = db.query(Session).filter(Session.id == session_id).first()
     if not s:
         raise HTTPException(404, "Session not found")
+    if s.user_id != current_user["user_id"]:
+        raise HTTPException(403, "Not your session")
     return _session_to_out(s)
 
 
 @router.delete("/{session_id}", status_code=204)
-def delete_session(session_id: str, db: DBSession = Depends(get_db)):
+def delete_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
     s = db.query(Session).filter(Session.id == session_id).first()
     if not s:
         raise HTTPException(404, "Session not found")
+    if s.user_id != current_user["user_id"]:
+        raise HTTPException(403, "Not your session")
     db.delete(s)
     db.commit()

@@ -6,12 +6,17 @@ from datetime import datetime, timezone, timedelta
 from database import get_db
 from models import Session, SessionExercise
 from schemas import InsightsResponse, ExerciseStat, CorrectionCount
+from auth import get_current_user
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
 
-@router.get("/{user_id}", response_model=InsightsResponse)
-def user_insights(user_id: str, db: DBSession = Depends(get_db)):
+@router.get("", response_model=InsightsResponse)
+def user_insights(
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    user_id = current_user["user_id"]
     sessions = db.query(Session).filter(Session.user_id == user_id).all()
 
     total_reps = 0
@@ -20,14 +25,12 @@ def user_insights(user_id: str, db: DBSession = Depends(get_db)):
     per_exercise: dict[str, dict] = {}
     correction_counter: Counter = Counter()
 
-    # Last 7 days activity (minutes per day, index 0 = 6 days ago)
     today = datetime.now(timezone.utc).date()
     day_minutes = [0] * 7
     active_days: set = set()
 
     for s in sessions:
         total_seconds += s.total_duration or 0
-        # Determine which bucket this session falls into
         try:
             started = datetime.fromisoformat((s.started_at or s.created_at).replace("Z", "+00:00"))
             delta_days = (today - started.date()).days
@@ -85,12 +88,10 @@ def user_insights(user_id: str, db: DBSession = Depends(get_db)):
 
 
 def _compute_streak(active_days: set, today) -> int:
-    """Count consecutive days ending today (or yesterday) with activity."""
     if not active_days:
         return 0
     streak = 0
     day = today
-    # Allow one day grace if they haven't worked out yet today
     if day not in active_days:
         day = day - timedelta(days=1)
     while day in active_days:
