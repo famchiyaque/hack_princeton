@@ -13,7 +13,7 @@ enum AppFlow {
 /// `fullScreenCover(item:)` so we never get mid-flight transitions where one
 /// sheet dismisses and another fails to re-present (the "black screen" bug).
 enum SessionStage: Identifiable {
-    case recording
+    case recording(ExerciseType)
     case ending
     case report(SessionReport)
 
@@ -112,8 +112,8 @@ struct RootView: View {
             // Body closure reads the binding — SwiftUI re-renders in place as
             // the stage transitions recording → ending → report.
             switch stage {
-            case .recording:
-                SessionView(stage: $sessionStage)
+            case .recording(let exercise):
+                SessionView(stage: $sessionStage, selectedExercise: exercise)
             case .ending:
                 SessionEndingOverlay()
             case .report(let report):
@@ -179,7 +179,7 @@ struct RootView: View {
                 switch selectedTab {
                 case .home:
                     DashboardView(userStore: userStore,
-                                  onStartSession: { sessionStage = .recording })
+                                  onStartSession: { exercise in sessionStage = .recording(exercise) })
                 case .workouts:
                     WorkoutsView(userStore: userStore)
                 case .insights:

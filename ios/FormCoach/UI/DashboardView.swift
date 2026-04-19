@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var userStore: UserStore
-    var onStartSession: () -> Void
+    var onStartSession: (ExerciseType) -> Void
 
     @State private var insights: APIInsights?
+    @State private var showExercisePicker = false
 
     var body: some View {
         ZStack {
@@ -170,13 +171,21 @@ struct DashboardView: View {
     // MARK: - Start button
 
     private var startButton: some View {
-        Button(action: onStartSession) {
+        Button { showExercisePicker = true } label: {
             HStack(spacing: 10) {
                 Image(systemName: "play.fill")
                 Text("Start Session")
             }
         }
         .buttonStyle(PrimaryButtonStyle())
+        .sheet(isPresented: $showExercisePicker) {
+            ExercisePickerSheet { exercise in
+                showExercisePicker = false
+                onStartSession(exercise)
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Weekly insights

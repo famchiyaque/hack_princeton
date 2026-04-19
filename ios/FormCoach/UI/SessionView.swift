@@ -6,15 +6,15 @@ struct SessionView: View {
     /// without racing against a parent `.dismiss()`.
     @Binding var stage: SessionStage?
 
+    /// The exercise the user chose before starting the session. This is the
+    /// single source of truth — no live classifier needed.
+    let selectedExercise: ExerciseType
+
     @StateObject private var camera       = CameraManager()
     @StateObject private var poseDetector = PoseDetector()
-    @StateObject private var classifier   = ExerciseClassifier()
     @StateObject private var sessionMgr   = SessionManager()
     @StateObject private var audioCoach   = AudioCoach()
 
-    /// Exercise is detected live by `ExerciseClassifier`. No manual picker —
-    /// the classifier is the single source of truth and re-classifies whenever
-    /// the user switches movements (squat ↔ deadlift ↔ not recognized).
     @State private var activeExercise: ExerciseType = .unknown
     @State private var repCounter = RepCounter(exercise: .unknown)
     @State private var formResult: FormResult?
@@ -22,10 +22,7 @@ struct SessionView: View {
     @State private var isPaused = false
     @State private var coachMessage: String = "Get into starting position"
     @State private var lastBubbleUpdate: TimeInterval = 0
-    @State private var heartRate: Int = 112
-    @State private var calories: Int = 34
 
-    // Tracks the extreme of the primary angle during current rep for the report.
     @State private var peakAngle: Double = 0
 
     private let comparator = FormComparator()
@@ -76,40 +73,30 @@ struct SessionView: View {
         }
         .statusBarHidden()
         .onAppear {
-            audioCoach.prefetch()  // download all ElevenLabs phrase audio in background
+            audioCoach.prefetch()
             camera.requestPermission()
             camera.onFrame = { [weak poseDetector] buf, orientation in
                 guard !isPaused else { return }
                 poseDetector?.process(sampleBuffer: buf, orientation: orientation)
             }
             sessionMgr.startSession()
+            handleExerciseChange(to: selectedExercise)
         }
         .onDisappear { camera.stop() }
         .onChange(of: poseDetector.currentPose) { _, pose in
             guard let pose, !isPaused else { return }
             processFrame(pose)
         }
-        .onChange(of: classifier.detectedExercise) { _, new in
-            handleExerciseChange(to: new)
-        }
     }
 
-    // MARK: - Exercise change handling
+    // MARK: - Exercise setup
 
-    /// Fires when the classifier flips (sticky) to a new exercise label.
-    /// Unknown → silence audio + pause rep counting; squat/deadlift → rebuild
-    /// the RepCounter, reset per-exercise state, and speak the startup cue.
     private func handleExerciseChange(to new: ExerciseType) {
         activeExercise = new
         repCounter = RepCounter(exercise: new)
         repCount = 0
         peakAngle = new.downThreshold
         formResult = nil
-
-        if new == .unknown {
-            coachMessage = "Exercise not recognized — try squat or deadlift"
-            return
-        }
 
         sessionMgr.selectExercise(new)
         if let line = scheduler.onExerciseStarted(new) {
@@ -184,9 +171,7 @@ struct SessionView: View {
 
     private var rightWidgets: some View {
         VStack(spacing: 10) {
-            widget(icon: "heart.fill",  value: "\(heartRate)", unit: "BPM",  color: KineticColor.danger)
-            widget(icon: "flame.fill",  value: "\(calories)",  unit: "KCAL", color: KineticColor.orange)
-            widget(icon: "repeat",      value: "\(repCount)",  unit: "REPS", color: .cyan)
+            widget(icon: "repeat", value: "\(repCount)", unit: "REPS", color: .cyan)
         }
     }
 
@@ -274,18 +259,8 @@ struct SessionView: View {
 
     private func processFrame(_ pose: BodyPose) {
         let angles = BodyAngles.from(pose: pose)
-        // Always feed the classifier — that's how we detect live exercise
-        // switches (squat → deadlift) mid-session.
-        classifier.update(angles: angles, pose: pose)
-
         let exercise = activeExercise
-        // Unknown → no rep counting, no audio, no form scoring. The coach
-        // bubble already shows "Exercise not recognized" (set in
-        // handleExerciseChange). Just wait until the classifier confirms
-        // a real exercise.
-        guard exercise == .squat || exercise == .deadlift else {
-            return
-        }
+        guard exercise != .unknown else { return }
 
         let (primaryAngle, phase): (Double?, String) = {
             switch exercise {
@@ -333,7 +308,6 @@ struct SessionView: View {
             let completed = repCounter.update(primaryAngle: angle)
             if completed {
                 repCount = repCounter.repCount
-                calories += 1
                 sessionMgr.recordRep(score: result.score,
                                      corrections: result.corrections,
                                      peakAngle: peakAngle)
@@ -384,20 +358,8 @@ struct SessionView: View {
         return ("READY", KineticColor.textSecondary)
     }
 
-    /// Pill label + color for the live classifier state. "DETECTING…" is shown
-    /// while we haven't confirmed a sticky label yet; once unknown is sticky,
-    /// we flip to "NOT RECOGNIZED" to make the demo's "walk away" state obvious.
     private var exerciseStatus: (label: String, color: Color, icon: String) {
-        switch classifier.detectedExercise {
-        case .squat:
-            return ("SQUAT", KineticColor.success, "figure.cooldown")
-        case .deadlift:
-            return ("DEADLIFT", KineticColor.success, "figure.strengthtraining.functional")
-        case .unknown where classifier.isStable:
-            return ("NOT RECOGNIZED", KineticColor.danger, "questionmark")
-        default:
-            return ("DETECTING…", KineticColor.textSecondary, "sparkle.magnifyingglass")
-        }
+        (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
     }
 
     private func formatted(_ seconds: Int) -> String {
