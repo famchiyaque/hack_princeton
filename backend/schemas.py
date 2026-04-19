@@ -98,6 +98,7 @@ class SessionOut(BaseModel):
     totalDuration: int
     startedAt: str
     createdAt: str
+    summary: str | None = None
     exercises: list[SessionExerciseOut] = []
 
     model_config = {"from_attributes": True}
@@ -106,6 +107,10 @@ class SessionOut(BaseModel):
 class SessionsResponse(BaseModel):
     sessions: list[SessionOut]
     total: int
+
+
+class LatestSessionResponse(BaseModel):
+    session: SessionOut | None
 
 
 # ── Insights ───────────────────────────────────────────────

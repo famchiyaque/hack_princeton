@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 from database import get_db
 from models import Session, SessionExercise
-from schemas import CreateSessionBody, SessionOut, SessionsResponse, SessionExerciseOut, CorrectionCount
+from schemas import CreateSessionBody, SessionOut, SessionsResponse, SessionExerciseOut, CorrectionCount, LatestSessionResponse
 from auth import get_current_user
 from datetime import datetime, timezone
 import uuid
@@ -29,6 +29,7 @@ def _session_to_out(s: Session) -> SessionOut:
         totalDuration=s.total_duration or 0,
         startedAt=s.started_at or "",
         createdAt=s.created_at or "",
+        summary=s.summary,
         exercises=[_exercise_to_out(e) for e in s.exercises],
     )
 
@@ -79,6 +80,22 @@ def list_sessions(
     total = query.count()
     sessions = query.order_by(Session.created_at.desc()).offset(offset).limit(limit).all()
     return SessionsResponse(sessions=[_session_to_out(s) for s in sessions], total=total)
+
+
+@router.get("/latest", response_model=LatestSessionResponse)
+def latest_session(
+    current_user: dict = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """Most recent session for the signed-in user (used to populate the dashboard)."""
+    user_id = current_user["user_id"]
+    s = (
+        db.query(Session)
+        .filter(Session.user_id == user_id)
+        .order_by(Session.created_at.desc())
+        .first()
+    )
+    return LatestSessionResponse(session=_session_to_out(s) if s else None)
 
 
 @router.get("/{session_id}", response_model=SessionOut)

@@ -5,6 +5,7 @@ struct DashboardView: View {
     var onStartSession: () -> Void
 
     @State private var insights: APIInsights?
+    @State private var latestSession: APISession?
 
     var body: some View {
         ZStack {
@@ -15,6 +16,7 @@ struct DashboardView: View {
                     topBar
                     greeting
                     statsRow
+                    lastSessionCard
                     programCard
                     startButton
                     weeklyInsights
@@ -26,6 +28,42 @@ struct DashboardView: View {
             .refreshable { await refresh() }
         }
         .task { await refresh() }
+    }
+
+    // MARK: - Last session AI summary
+
+    @ViewBuilder
+    private var lastSessionCard: some View {
+        if let summary = latestSession?.summary, !summary.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("YOUR LAST SESSION")
+                    .font(KineticFont.caption(10)).kerning(2)
+                    .foregroundStyle(KineticColor.textSecondary)
+
+                GlassCard(padding: 16) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(KineticColor.orangeSoft)
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(KineticColor.orange)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("AI Coach Review")
+                                .font(KineticFont.heading(14))
+                                .foregroundStyle(.white)
+                            Text(summary)
+                                .font(KineticFont.body(13))
+                                .foregroundStyle(KineticColor.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Top bar
@@ -238,6 +276,11 @@ struct DashboardView: View {
     // MARK: - Data
 
     private func refresh() async {
-        insights = try? await APIClient.shared.getInsights()
+        async let insightsTask = try? await APIClient.shared.getInsights()
+        async let latestTask = try? await APIClient.shared.getLatestSession()
+        let (i, l) = await (insightsTask, latestTask)
+        insights = i
+        // `latestTask` is `APISession??` — flatten the optional-of-optional.
+        latestSession = l ?? nil
     }
 }

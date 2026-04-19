@@ -64,10 +64,14 @@ def session_summary(
                 {"role": "user", "content": prompt},
             ],
         )
-        summary = response.choices[0].message.content
+        summary = (response.choices[0].message.content or "").strip()
     except ImportError:
         raise HTTPException(503, "openai package not installed")
     except Exception as e:
         raise HTTPException(502, f"AI request failed: {e}")
+
+    session.summary = summary
+    db.add(session)
+    db.commit()
 
     return SessionSummaryResponse(sessionId=body.sessionId, summary=summary)

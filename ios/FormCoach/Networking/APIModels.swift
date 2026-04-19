@@ -90,12 +90,28 @@ struct APISession: Codable, Identifiable {
     let totalDuration: Int
     let startedAt: String
     let createdAt: String
+    let summary: String?
     let exercises: [APISessionExercise]
 }
 
 struct SessionsResponse: Codable {
     let sessions: [APISession]
     let total: Int
+}
+
+struct LatestSessionResponse: Codable {
+    let session: APISession?
+}
+
+// MARK: - Analysis
+
+struct SessionSummaryPayload: Codable {
+    let sessionId: String
+}
+
+struct SessionSummaryResponse: Codable {
+    let sessionId: String
+    let summary: String
 }
 
 // MARK: - Insights

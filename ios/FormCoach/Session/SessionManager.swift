@@ -128,6 +128,19 @@ final class SessionManager: ObservableObject {
         )
         do {
             let saved = try await APIClient.shared.createSession(payload)
+            // Fire the AI summary request. We intentionally don't bubble
+            // failures into `saveError` — the session is already persisted;
+            // the summary is a best-effort enrichment that'll be filled in
+            // server-side and picked up on the next dashboard refresh.
+            Task.detached { [id = saved.id] in
+                do {
+                    _ = try await APIClient.shared.requestSessionSummary(sessionId: id)
+                } catch {
+                    #if DEBUG
+                    print("[SessionManager] session-summary request failed: \(error)")
+                    #endif
+                }
+            }
             return SessionEndResult(sessionId: saved.id, saveError: nil)
         } catch {
             let message: String

@@ -76,6 +76,28 @@ final class APIClient {
         return try decoder.decode(SessionsResponse.self, from: data).sessions
     }
 
+    /// Most recent session for the signed-in user (includes the AI summary if
+    /// one has been generated). Used to populate the dashboard on login.
+    func getLatestSession() async throws -> APISession? {
+        let req = await authorizedRequest(url: url("/sessions/latest"))
+        let (data, _) = try await session.data(for: req)
+        return try decoder.decode(LatestSessionResponse.self, from: data).session
+    }
+
+    // MARK: - Analysis (authenticated)
+
+    /// Asks the backend to generate the AI post-session summary for a session
+    /// that's already been persisted. The backend also stores the summary in
+    /// the DB, so subsequent fetches of the session include it. Uses a longer
+    /// timeout than normal requests since the OpenAI round-trip takes a few seconds.
+    func requestSessionSummary(sessionId: String) async throws -> String {
+        var req = await authorizedRequest(url: url("/analysis/session-summary"), method: "POST")
+        req.httpBody = try encoder.encode(SessionSummaryPayload(sessionId: sessionId))
+        req.timeoutInterval = 30.0
+        let (data, _) = try await session.data(for: req)
+        return try decoder.decode(SessionSummaryResponse.self, from: data).summary
+    }
+
     // MARK: - Insights (authenticated — user derived from token)
 
     func getInsights() async throws -> APIInsights {
