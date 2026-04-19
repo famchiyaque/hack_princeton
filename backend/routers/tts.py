@@ -13,7 +13,8 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 
 # ── ElevenLabs config ─────────────────────────────────────────────────────────
 # Models (fastest → best quality):
-#   eleven_turbo_v2_5   ~300 ms TTFB  ← default
+#   eleven_flash_v2_5   ~75 ms TTFB   ← default (lowest latency)
+#   eleven_turbo_v2_5   ~300 ms TTFB
 #   eleven_turbo_v2     ~400 ms
 #   eleven_multilingual_v2  best quality, ~600-800 ms
 #
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 #   nPczCjzI2devNBz1zQrb  Brian   – deep male
 
 VOICE_ID  = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
-MODEL_ID  = os.getenv("ELEVENLABS_MODEL_ID",  "eleven_turbo_v2_5")
+MODEL_ID  = os.getenv("ELEVENLABS_MODEL_ID",  "eleven_flash_v2_5")
 BASE_URL  = "https://api.elevenlabs.io/v1"
 
 # ── All static coaching phrases used by FeedbackScheduler ─────────────────────
@@ -40,6 +41,12 @@ PHRASES: list[str] = [
     "Hands to sky, feet wide on the jump. Go.",
     "Big jumps, arms all the way up. Begin.",
     "Get into starting position. Begin when ready.",
+    "Bar over midfoot. Flat back, chest proud. Pull.",
+    "Set your back, brace your core, then lift.",
+    "Shoulders over the bar, neutral spine. Go.",
+
+    # first rep
+    "One rep in the books",
 
     # squat faults
     "Sink deeper",
@@ -71,6 +78,17 @@ PHRASES: list[str] = [
     "Feet wider",
     "Bigger jumps out",
     "Wider stance on the jump",
+
+    # deadlift faults
+    "Chest up, don't round",
+    "Brace hard, neutral spine",
+    "Back is rounding — reset",
+    "Drive your hips through",
+    "Finish with the hips",
+    "Squeeze glutes at the top",
+    "Don't squat the pull — hinge",
+    "Hips back, not down",
+    "Push the floor away, hips lead",
 
     # encouragement
     "Nice form",

@@ -3,7 +3,9 @@ import os
 
 // Change to your Mac's LAN IP when testing on a physical device.
 // e.g. "http://192.168.1.42:8000"
-private let backendBase = "http://localhost:8000"
+private var backendBase: String {
+    APIClient.defaultBaseURL.replacingOccurrences(of: "/api", with: "")
+}
 
 private let log = Logger(subsystem: "com.formcoach", category: "AudioCoach")
 
@@ -45,11 +47,19 @@ final class AudioCoach: NSObject, ObservableObject {
     func prefetch() {
         guard let url = URL(string: "\(backendBase)/api/tts/bundle") else { return }
 
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let self, let data, error == nil else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self else { return }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard let data, error == nil, (200...299).contains(status) else {
+                log.warning("TTS bundle fetch failed (status \(status)): \(error?.localizedDescription ?? "no data")")
+                return
+            }
 
             struct Bundle: Decodable { let phrases: [String: String] }
-            guard let bundle = try? JSONDecoder().decode(Bundle.self, from: data) else { return }
+            guard let bundle = try? JSONDecoder().decode(Bundle.self, from: data) else {
+                log.warning("TTS bundle decode failed (\(data.count) bytes)")
+                return
+            }
 
             var decoded: [String: Data] = [:]
             for (phrase, b64) in bundle.phrases {
@@ -139,13 +149,15 @@ final class AudioCoach: NSObject, ObservableObject {
         struct Body: Encodable { let text: String }
         request.httpBody = try? JSONEncoder().encode(Body(text: text))
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let self else { return }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             DispatchQueue.main.async {
-                if let data, error == nil {
-                    self.audioCache[text] = data  // cache for next time
+                if let data, error == nil, (200...299).contains(status) {
+                    self.audioCache[text] = data
                     self.playMP3(data, fallbackText: text)
                 } else {
+                    log.warning("TTS fetch failed (status \(status)): \(error?.localizedDescription ?? "unknown")")
                     self.speakLocally(text)
                 }
             }
@@ -167,9 +179,9 @@ final class AudioCoach: NSObject, ObservableObject {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
-                .playback,
+                .playAndRecord,
                 mode: .spokenAudio,
-                options: [.duckOthers, .mixWithOthers]
+                options: [.defaultToSpeaker, .mixWithOthers, .allowBluetooth]
             )
             try session.setActive(true, options: [])
         } catch {
