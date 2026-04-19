@@ -4,10 +4,9 @@ import QuartzCore
 
 struct SessionView: View {
     /// Drives the whole session flow (recording → ending → report → dismissed).
-    /// Binding rather than callback so the view drives its own transitions
-    /// without racing against a parent `.dismiss()`.
     @Binding var stage: SessionStage?
 
+<<<<<<< HEAD
     /// The exercise the user chose before starting the session. This is the
     /// single source of truth — no live classifier needed.
     let selectedExercise: ExerciseType
@@ -21,25 +20,39 @@ struct SessionView: View {
 =======
     /// After recognition locks, the classifier stops; this is the active drill.
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
+=======
+    /// Exercise chosen before recording (`SessionStage.recording`); single source of truth.
+    let selectedExercise: ExerciseType
+
+    @StateObject private var camera = CameraManager()
+    @StateObject private var poseDetector = PoseDetector()
+    @StateObject private var sessionMgr = SessionManager()
+    @StateObject private var audioCoach = AudioCoach()
+
+>>>>>>> 024fa15 (model classifies exercise and locks)
     @State private var activeExercise: ExerciseType = .unknown
-    @State private var recognitionLocked = false
     @State private var repCounter = RepCounter(exercise: .unknown)
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
-    @State private var coachMessage = "Detecting exercise — show a squat, deadlift, or curl"
-    /// Curl-only: reps count only after arms are stable and highlighted green.
+    @State private var coachMessage = ""
+    /// Curl-only: reps count after starting position is locked AND arms are stable/green.
     @State private var curlRepUnlocked = false
     @State private var curlReadyFrames = 0
     @State private var elbowTracker = ElbowStabilityTracker()
     @State private var lastElbowCueTime: TimeInterval = 0
     @State private var jointHighlightStates: [VNHumanBodyPoseObservation.JointName: JointVisualState] = [:]
     @State private var lastBubbleUpdate: TimeInterval = 0
+<<<<<<< HEAD
+
+    @State private var posDetector = StartingPositionDetector()
+    @State private var skeletonColor: Color = KineticColor.orange
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
 
     @State private var posDetector = StartingPositionDetector()
     @State private var skeletonColor: Color = KineticColor.orange
 
-    // Tracks the extreme of the primary angle during current rep for the report.
     @State private var peakAngle: Double = 0
 
     private let comparator = FormComparator()
@@ -65,8 +78,9 @@ struct SessionView: View {
                 SkeletonOverlay(
                     pose: poseDetector.currentPose,
                     viewSize: geo.size,
-                    exercise: recognitionLocked ? activeExercise : .unknown,
-                    jointStates: jointHighlightStates
+                    exercise: activeExercise == .unknown ? .unknown : activeExercise,
+                    jointStates: jointHighlightStates,
+                    color: skeletonColor
                 )
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
 
@@ -118,9 +132,12 @@ struct SessionView: View {
     // MARK: - Exercise setup
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     /// Called once when recognition locks onto squat, deadlift, or curl.
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
     private func handleExerciseChange(to new: ExerciseType) {
         activeExercise = new
         repCounter = RepCounter(exercise: new)
@@ -137,18 +154,13 @@ struct SessionView: View {
         curlReadyFrames = 0
         elbowTracker = ElbowStabilityTracker()
         jointHighlightStates = [:]
+        posDetector.reset()
+        skeletonColor = KineticColor.orange
 
-        if new == .unknown {
-            coachMessage = "Exercise not recognized — try squat, deadlift, or bicep curl"
-            return
-        }
+        coachMessage = new.startingPositionCue
 
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
         sessionMgr.selectExercise(new)
-        coachMessage = new == .curl
-            ? "Curl mode — keep elbows tucked; green means go"
-            : "Locked in — focus on form"
-
         if let line = scheduler.onExerciseStarted(new) {
             audioCoach.speak(line, priority: 9)
         }
@@ -202,8 +214,6 @@ struct SessionView: View {
             Spacer()
 
             Button {
-                // Explicit quit: tear down and close the whole flow — skips
-                // the report because the user hasn't produced a complete session.
                 audioCoach.stop()
                 camera.stop()
                 stage = nil
@@ -310,6 +320,7 @@ struct SessionView: View {
     private func processFrame(_ pose: BodyPose) {
         let angles = BodyAngles.from(pose: pose)
 <<<<<<< HEAD
+<<<<<<< HEAD
         let exercise = activeExercise
         guard exercise != .unknown else { return }
 =======
@@ -326,6 +337,8 @@ struct SessionView: View {
             handleExerciseChange(to: classifier.detectedExercise)
         }
 
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
         let exercise = activeExercise
         guard exercise == .squat || exercise == .deadlift || exercise == .curl else {
             jointHighlightStates = [:]
@@ -358,12 +371,18 @@ struct SessionView: View {
         }()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
         // Update starting-position detector and handle lock transition.
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
         let prevState = posDetector.state
         let currentState = posDetector.update(angles: angles, exercise: exercise)
 
         if prevState != .locked, currentState == .locked {
+<<<<<<< HEAD
             // First frame of lock: green flash then revert.
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
             skeletonColor = .green
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 skeletonColor = KineticColor.orange
@@ -373,6 +392,7 @@ struct SessionView: View {
             }
         }
 
+<<<<<<< HEAD
         let result = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
         formResult = result
 
@@ -385,10 +405,12 @@ struct SessionView: View {
         // Track peak and count reps only after position is confirmed.
         if currentState == .locked, let angle = primaryAngle {
 =======
+=======
+>>>>>>> 024fa15 (model classifies exercise and locks)
         let baseResult = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
         var result = baseResult
 
-        if exercise == .curl {
+        if exercise == .curl, currentState == .locked {
             var t = elbowTracker
             let stable = t.update(pose: pose)
             elbowTracker = t
@@ -417,8 +439,7 @@ struct SessionView: View {
                     curlReadyFrames += 1
                     if curlReadyFrames >= 12 {
                         curlRepUnlocked = true
-                        audioCoach.speak("Begin your reps", priority: 7)
-                        coachMessage = "Begin your reps"
+                        coachMessage = "Start curling — reps count now"
                     }
                 } else {
                     curlReadyFrames = 0
@@ -429,13 +450,16 @@ struct SessionView: View {
                 audioCoach.speak(line, priority: 6)
             }
         } else {
-            jointHighlightStates = [:]
-            formResult = result
-            if let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+            if exercise != .curl || currentState != .locked {
+                jointHighlightStates = [:]
+            }
+            formResult = baseResult
+            if currentState == .locked, let line = scheduler.onFrame(result: baseResult, repPhase: repCounter.phase) {
                 audioCoach.speak(line, priority: 6)
             }
         }
 
+<<<<<<< HEAD
         if let angle = primaryAngle {
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
             switch exercise {
@@ -468,14 +492,42 @@ struct SessionView: View {
                                          peakAngle: peakAngle)
                     peakAngle = exercise.downThreshold
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
+=======
+        guard currentState == .locked, let angle = primaryAngle else {
+            throttleCoachBubble(positionState: posDetector.state, result: baseResult, exercise: exercise)
+            return
+        }
 
-                    if let line = scheduler.onRepCompleted(score: snap.score) {
-                        audioCoach.speak(line, priority: 7)
-                    }
+        switch exercise {
+        case .jumpingJacks, .deadlift:
+            peakAngle = max(peakAngle, angle)
+        case .curl:
+            peakAngle = min(peakAngle, angle)
+        default:
+            peakAngle = min(peakAngle, angle)
+        }
+>>>>>>> 024fa15 (model classifies exercise and locks)
+
+        let allowReps = exercise != .curl || curlRepUnlocked
+        if allowReps {
+            let completed = repCounter.update(primaryAngle: angle)
+            if completed {
+                repCount = repCounter.repCount
+                let snap = formResult ?? baseResult
+                sessionMgr.recordRep(
+                    score: snap.score,
+                    corrections: snap.corrections,
+                    peakAngle: peakAngle
+                )
+                peakAngle = exercise.downThreshold
+
+                if let line = scheduler.onRepCompleted(score: snap.score) {
+                    audioCoach.speak(line, priority: 7)
                 }
             }
         }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
         // Throttle the visual bubble to ~2 Hz so it doesn't flicker at 30 fps.
         let now = CACurrentMediaTime()
@@ -498,6 +550,26 @@ struct SessionView: View {
                 coachMessage = scheduler.visualHint(result: fr)
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
             }
+=======
+        throttleCoachBubble(positionState: posDetector.state, result: formResult ?? baseResult, exercise: exercise)
+    }
+
+    private func throttleCoachBubble(positionState: PositionState, result: FormResult, exercise: ExerciseType) {
+        let hintTime = CACurrentMediaTime()
+        guard hintTime - lastBubbleUpdate >= 0.5 else { return }
+        lastBubbleUpdate = hintTime
+
+        let elbowCue = result.corrections.contains { $0.joint == "elbowStability" }
+        if exercise == .curl, elbowCue { return }
+
+        switch positionState {
+        case .waiting:
+            coachMessage = exercise.startingPositionCue
+        case .approaching:
+            coachMessage = "Hold still… almost there"
+        case .locked:
+            coachMessage = scheduler.visualHint(result: result)
+>>>>>>> 024fa15 (model classifies exercise and locks)
         }
     }
 
@@ -532,19 +604,13 @@ struct SessionView: View {
     }
 
     private func endSession() {
-        // 1) Freeze the on-device report immediately — we never depend on the
-        //    network to show the user their stats.
         var report = sessionMgr.buildReport()
 
-        // 2) Tear down audio + camera up front so the ending overlay is calm.
         audioCoach.stop()
         camera.stop()
 
-        // 3) Flip to the ending overlay; SwiftUI swaps the body in place.
         stage = .ending
 
-        // 4) Best-effort backend sync, then unconditionally route to the
-        //    report screen. Even on timeout/error we surface a banner there.
         Task { @MainActor in
             let result = await sessionMgr.endSession()
             report.saveError = result.saveError
@@ -557,12 +623,13 @@ struct SessionView: View {
     private var formStatus: (label: String, color: Color) {
         let s = formResult?.score ?? 0
         if s > 80 { return ("GOOD", KineticColor.success) }
-        if s > 55 { return ("OK",   KineticColor.warning) }
-        if s > 0  { return ("FIX",  KineticColor.danger)  }
+        if s > 55 { return ("OK", KineticColor.warning) }
+        if s > 0 { return ("FIX", KineticColor.danger) }
         return ("READY", KineticColor.textSecondary)
     }
 
     private var exerciseStatus: (label: String, color: Color, icon: String) {
+<<<<<<< HEAD
 <<<<<<< HEAD
         (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
 =======
@@ -591,6 +658,9 @@ struct SessionView: View {
             return ("DETECTING…", KineticColor.textSecondary, "sparkle.magnifyingglass")
         }
 >>>>>>> 3e07889 (feature: classify exercise by logical positions)
+=======
+        (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
+>>>>>>> 024fa15 (model classifies exercise and locks)
     }
 
     private func formatted(_ seconds: Int) -> String {
