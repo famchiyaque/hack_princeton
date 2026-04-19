@@ -1,4 +1,6 @@
 import SwiftUI
+import Vision
+import QuartzCore
 
 struct SessionView: View {
     @Binding var stage: SessionStage?
@@ -38,7 +40,13 @@ struct SessionView: View {
                 )
                 .ignoresSafeArea()
 
-                SkeletonOverlay(pose: poseDetector.currentPose, viewSize: geo.size, color: skeletonColor)
+                SkeletonOverlay(
+                    pose: poseDetector.currentPose,
+                    viewSize: geo.size,
+                    exercise: activeExercise,
+                    jointStates: jointHighlightStates,
+                    color: skeletonColor
+                )
 
                 if isCountingDown {
                     Color.black.opacity(0.6).ignoresSafeArea()
@@ -95,6 +103,9 @@ struct SessionView: View {
         .onChange(of: poseDetector.currentPose) { _, pose in
             guard let pose, !isPaused, !isCountingDown else { return }
             processFrame(pose)
+        }
+        .onChange(of: classifier.detectedExercise) { _, new in
+            handleExerciseChange(to: new)
         }
     }
 
@@ -179,8 +190,6 @@ struct SessionView: View {
             Spacer()
 
             Button {
-                // Explicit quit: tear down and close the whole flow — skips
-                // the report because the user hasn't produced a complete session.
                 audioCoach.stop()
                 camera.stop()
                 stage = nil
@@ -377,20 +386,31 @@ struct SessionView: View {
         }
     }
 
-    private func endSession() {
-        // 1) Freeze the on-device report immediately — we never depend on the
-        //    network to show the user their stats.
-        var report = sessionMgr.buildReport()
+    private func updateCurlJointHighlights(leftOK: Bool, rightOK: Bool, score: Double) {
+        typealias JN = VNHumanBodyPoseObservation.JointName
+        var m: [JN: JointVisualState] = [:]
+        let scoreGood = score > 48 || curlRepUnlocked
 
-        // 2) Tear down audio + camera up front so the ending overlay is calm.
+        if !leftOK {
+            m[.leftShoulder] = .bad; m[.leftElbow] = .bad; m[.leftWrist] = .bad
+        } else if leftOK && scoreGood {
+            m[.leftShoulder] = .good; m[.leftElbow] = .good; m[.leftWrist] = .good
+        }
+
+        if !rightOK {
+            m[.rightShoulder] = .bad; m[.rightElbow] = .bad; m[.rightWrist] = .bad
+        } else if rightOK && scoreGood {
+            m[.rightShoulder] = .good; m[.rightElbow] = .good; m[.rightWrist] = .good
+        }
+
+        jointHighlightStates = m
+    }
+
+    private func endSession() {
+        var report = sessionMgr.buildReport()
         audioCoach.stop()
         camera.stop()
-
-        // 3) Flip to the ending overlay; SwiftUI swaps the body in place.
         stage = .ending
-
-        // 4) Best-effort backend sync, then unconditionally route to the
-        //    report screen. Even on timeout/error we surface a banner there.
         Task { @MainActor in
             let result = await sessionMgr.endSession()
             report.saveError = result.saveError
@@ -400,6 +420,8 @@ struct SessionView: View {
 
     // MARK: - Helpers
 
+    /// Only show a scored status once position is locked; shows "READY" beforehand
+    /// so the user isn't confused by flickering GOOD/FIX during the setup phase.
     private var formStatus: (label: String, color: Color) {
         let s = smoothedFormScore
         guard activeExercise != .unknown else { return ("READY", KineticColor.textSecondary) }

@@ -39,7 +39,6 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .squat:    "squat"
         case .deadlift: "deadlift"
-        case .pushup:   "pushup"
         case .curl:     "bicep_curl"
         default:        nil
         }

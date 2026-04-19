@@ -73,7 +73,7 @@ struct StartingPositionDetector {
     // MARK: - Private
 
     private func isInStartPosition(angles: BodyAngles, exercise: ExerciseType) -> Bool {
-        guard let topRef = FormComparator.reference[exercise]?["top"] else { return false }
+        guard let topRef = FormComparator.reference[exercise]?[exercise.startPositionPhase] else { return false }
 
         var checks = 0
         var passed = 0
@@ -97,9 +97,23 @@ struct StartingPositionDetector {
     }
 }
 
-// MARK: - Per-exercise guidance text
+// MARK: - Per-exercise extensions
 
 extension ExerciseType {
+    /// Which FormComparator phase key represents the correct starting position.
+    /// - curl: "bottom" (arms extended) — "top" means arm curled up, which is wrong
+    /// - jumpingJacks: "closed" (neutral stance) — no "top" key exists
+    /// - plank: "hold" — only phase available
+    /// - all others: "top" (standing/extended)
+    var startPositionPhase: String {
+        switch self {
+        case .curl:         return "bottom"
+        case .jumpingJacks: return "closed"
+        case .plank:        return "hold"
+        default:            return "top"
+        }
+    }
+
     /// Prompt shown in the coach bubble while the user hasn't yet locked into position.
     var startingPositionCue: String {
         switch self {
@@ -114,3 +128,4 @@ extension ExerciseType {
         }
     }
 }
+
