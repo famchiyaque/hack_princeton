@@ -6,11 +6,9 @@ struct SessionView: View {
     /// Drives the whole session flow (recording → ending → report → dismissed).
     @Binding var stage: SessionStage?
 
-    /// Exercise chosen before recording; single source of truth.
-    let selectedExercise: ExerciseType
-
     @StateObject private var camera       = CameraManager()
     @StateObject private var poseDetector = PoseDetector()
+    @StateObject private var classifier   = ExerciseClassifier()
     @StateObject private var sessionMgr   = SessionManager()
     @StateObject private var audioCoach   = AudioCoach()
 
@@ -19,7 +17,7 @@ struct SessionView: View {
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
-    @State private var coachMessage = ""
+    @State private var coachMessage = "Move in frame — we detect squat, deadlift, or bicep curl"
 
     // Curl-specific: second gate after position lock — elbow stability must hold.
     @State private var curlRepUnlocked = false
@@ -94,12 +92,14 @@ struct SessionView: View {
                 poseDetector?.process(sampleBuffer: buf, orientation: orientation)
             }
             sessionMgr.startSession()
-            handleExerciseChange(to: selectedExercise)
         }
         .onDisappear { camera.stop() }
         .onChange(of: poseDetector.currentPose) { _, pose in
             guard let pose, !isPaused else { return }
             processFrame(pose)
+        }
+        .onChange(of: classifier.detectedExercise) { _, new in
+            handleExerciseChange(to: new)
         }
     }
 
@@ -117,6 +117,14 @@ struct SessionView: View {
         jointHighlightStates = [:]
         posDetector.reset()
         skeletonColor = KineticColor.orange
+
+        if new == .unknown {
+            coachMessage = classifier.isStable
+                ? "Exercise not recognized — try squat, deadlift, or bicep curl"
+                : "Move in frame — we detect squat, deadlift, or bicep curl"
+            return
+        }
+
         coachMessage = new.startingPositionCue
         sessionMgr.selectExercise(new)
         if let line = scheduler.onExerciseStarted(new) {
@@ -277,8 +285,13 @@ struct SessionView: View {
 
     private func processFrame(_ pose: BodyPose) {
         let angles = BodyAngles.from(pose: pose)
+        classifier.update(angles: angles, pose: pose)
+
         let exercise = activeExercise
-        guard exercise != .unknown else { return }
+        guard exercise != .unknown else {
+            throttleDetectingBubble()
+            return
+        }
 
         let (primaryAngle, phase): (Double?, String) = {
             switch exercise {
@@ -472,7 +485,29 @@ struct SessionView: View {
     }
 
     private var exerciseStatus: (label: String, color: Color, icon: String) {
-        (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
+        switch classifier.detectedExercise {
+        case .squat:
+            return ("SQUAT", KineticColor.success, "figure.cooldown")
+        case .deadlift:
+            return ("DEADLIFT", KineticColor.success, "figure.strengthtraining.functional")
+        case .curl:
+            return ("BICEP CURL", KineticColor.success, "dumbbell.fill")
+        case .unknown where classifier.isStable:
+            return ("NOT RECOGNIZED", KineticColor.danger, "questionmark")
+        default:
+            return ("DETECTING…", KineticColor.textSecondary, "sparkle.magnifyingglass")
+        }
+    }
+
+    private func throttleDetectingBubble() {
+        let now = CACurrentMediaTime()
+        guard now - lastBubbleUpdate >= 0.5 else { return }
+        lastBubbleUpdate = now
+        if classifier.isStable, classifier.detectedExercise == .unknown {
+            coachMessage = "Exercise not recognized — try squat, deadlift, or bicep curl"
+        } else {
+            coachMessage = "Detecting movement…"
+        }
     }
 
     private func formatted(_ seconds: Int) -> String {

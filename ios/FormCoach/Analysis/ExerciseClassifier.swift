@@ -36,7 +36,6 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .squat:    "squat"
         case .deadlift: "deadlift"
-        case .pushup:   "pushup"
         case .curl:     "bicep_curl"
         default:        nil
         }
@@ -64,7 +63,7 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Real-time classifier restricted (for the demo) to squat, deadlift, or unknown.
+/// Real-time classifier for squat, deadlift, bicep curl, or unknown.
 ///
 /// Strategy:
 ///  - Maintain a ~0.7 s rolling window of angle samples + wrist-y travel.
@@ -77,8 +76,6 @@ final class ExerciseClassifier: ObservableObject {
     /// True once the current label has been confirmed by the sticky filter.
     /// Useful for UI that wants to show a "Detecting..." state early on.
     @Published var isStable: Bool = false
-    /// After the first locked exercise, recognition stops (no more `update` work).
-    @Published private(set) var recognitionSuspended: Bool = false
 
     // MARK: - Tunables
 
@@ -104,16 +101,7 @@ final class ExerciseClassifier: ObservableObject {
 
     // MARK: - Public API
 
-    /// Call once a stable exercise is chosen; classifier stops consuming frames.
-    func suspendRecognition() {
-        DispatchQueue.main.async {
-            self.recognitionSuspended = true
-        }
-    }
-
     func update(angles: BodyAngles, pose: BodyPose) {
-        guard !recognitionSuspended else { return }
-
         samples.append(Sample(
             angles: angles,
             wristY: meanY(pose.point(for: .leftWrist), pose.point(for: .rightWrist)),
@@ -152,7 +140,6 @@ final class ExerciseClassifier: ObservableObject {
         DispatchQueue.main.async {
             self.detectedExercise = .unknown
             self.isStable = false
-            self.recognitionSuspended = false
         }
     }
 
