@@ -64,12 +64,12 @@ struct FormComparator {
                                      spineAngle: .init(min: 160, max: 180)),
         ],
         .squat: [
-            "bottom": ReferenceFrame(kneeAngle:  .init(min: 60,  max: 100),
-                                     hipAngle:   .init(min: 60,  max: 100),
-                                     spineAngle: .init(min: 150, max: 180)),
-            "top":    ReferenceFrame(kneeAngle:  .init(min: 155, max: 180),
-                                     hipAngle:   .init(min: 155, max: 180),
-                                     spineAngle: .init(min: 150, max: 180)),
+            "bottom": ReferenceFrame(kneeAngle:  .init(min: 40,  max: 140),
+                                     hipAngle:   .init(min: 40,  max: 140),
+                                     spineAngle: .init(min: 110, max: 180)),
+            "top":    ReferenceFrame(kneeAngle:  .init(min: 120, max: 180),
+                                     hipAngle:   .init(min: 120, max: 180),
+                                     spineAngle: .init(min: 110, max: 180)),
         ],
         .deadlift: [
             // Spine floor tightened to 155 — picks up mild rounding at the
@@ -102,16 +102,16 @@ struct FormComparator {
                                      shoulderAngle: .init(min: 0,   max: 40)),
         ],
         .curl: [
-            "bottom": ReferenceFrame(elbowAngle: .init(min: 150, max: 180),
-                                     spineAngle: .init(min: 165, max: 180)),
-            "top":    ReferenceFrame(elbowAngle: .init(min: 30,  max: 60),
-                                     spineAngle: .init(min: 165, max: 180)),
+            "bottom": ReferenceFrame(elbowAngle: .init(min: 130, max: 180),
+                                     spineAngle: .init(min: 145, max: 180)),
+            "top":    ReferenceFrame(elbowAngle: .init(min: 20,  max: 80),
+                                     spineAngle: .init(min: 145, max: 180)),
         ],
     ]
 
     static let weights: [ExerciseType: [String: Double]] = [
         .pushup:       ["elbowAngle": 0.40, "hipAngle": 0.30, "spineAngle": 0.30],
-        .squat:        ["kneeAngle":  0.40, "hipAngle": 0.25, "spineAngle": 0.35],
+        .squat:        ["kneeAngle":  0.45, "hipAngle": 0.35, "spineAngle": 0.20],
         .deadlift:     ["spineAngle": 0.50, "hipAngle": 0.30, "kneeAngle":  0.20],
         .plank:        ["hipAngle":   0.40, "spineAngle": 0.30, "elbowAngle": 0.20, "kneeAngle": 0.10],
         .lunge:        ["kneeAngle":  0.40, "hipAngle": 0.30, "spineAngle": 0.30],
@@ -149,10 +149,10 @@ struct FormComparator {
             guard let angle, let range, let weight = w[name] else { return }
             totalWeight += weight
             let dev = range.deviation(from: angle)
-            let jointScore = dev == 0 ? 100.0 : max(0, 100 - (dev / 30) * 100)
+            let jointScore = dev == 0 ? 100.0 : max(0, 100 - (dev / 60) * 100)
             weightedScore += weight * jointScore
 
-            if dev > 10 {
+            if dev > 20 {
                 let key = angle < range.min ? "\(name)_low" : "\(name)_high"
                 let msg = Self.messages[exercise.rawValue]?[key]
                     ?? (angle < range.min ? "Improve your \(name)" : "Don't overextend")

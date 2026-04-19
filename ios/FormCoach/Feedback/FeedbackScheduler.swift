@@ -18,8 +18,8 @@ final class FeedbackScheduler {
     private let encouragementEveryNReps = 3
     /// Lowered from 0.8 so we actually cue common descent faults (0.8 is rare
     /// in practice — the user went a full minute without any audio).
-    private let midRepSeverityThreshold: Double = 0.6
-    private let postRepSeverityThreshold: Double = 0.45
+    private let midRepSeverityThreshold: Double = 0.35
+    private let postRepSeverityThreshold: Double = 0.3
     private let recentPhrasesMemory = 2   // don't repeat the last N spoken phrases
 
     // MARK: - State
@@ -145,6 +145,23 @@ final class FeedbackScheduler {
         return line
     }
 
+    /// Called when the FormFeedbackEngine has persistent issues to speak.
+    func onFormIssue(_ issue: FormIssue) -> String? {
+        guard canSpeak() else { return nil }
+        guard let bank = Phrases.formIssues[issue.type] else { return nil }
+        let line = pick(from: bank)
+        markSpoken(line)
+        return line
+    }
+
+    /// Fallback: speak a FormComparator correction message directly when no
+    /// FormFeedbackEngine issue is active but the score is low.
+    func onFormCorrectionFallback(_ message: String) -> String? {
+        guard canSpeak() else { return nil }
+        markSpoken(message)
+        return message
+    }
+
     /// Hint text for the coach-bubble UI. Visual only, no speech.
     /// Picks the worst currently-accumulated fault, or a default.
     func visualHint(result: FormResult) -> String {
@@ -218,6 +235,11 @@ private enum Phrases {
             "Set your back, brace your core, then lift.",
             "Shoulders over the bar, neutral spine. Go.",
         ],
+        "curl": [
+            "Elbows at your sides, full range of motion. Go.",
+            "Control the weight, squeeze at the top. Begin.",
+            "Keep your back straight, arms do the work. Go.",
+        ],
     ]
 
     static let genericStart: [String] = [
@@ -284,10 +306,39 @@ private enum Phrases {
             "Squeeze glutes at the top",
         ],
         "deadlift:kneeAngle_low": [
-            "Don't squat the pull — hinge",
-            "Hips back, not down",
-            "Push the floor away, hips lead",
-        ],
+                    "Don't squat the pull — hinge",
+                    "Hips back, not down",
+                    "Push the floor away, hips lead",
+                ],
+
+                // Curl
+                "curl:elbowAngle_high": [
+                    "Curl higher",
+                    "Squeeze at the top",
+                    "Bring it all the way up",
+                ],
+                "curl:elbowAngle_low": [
+                    "Fully extend at the bottom",
+                    "Straighten your arms",
+                    "Full range of motion",
+                ],
+                "curl:spineAngle_low": [
+                    "Stop swinging",
+                    "Keep your back straight",
+                    "Use your arms, not your back",
+                ],
+            ]
+
+    static let formIssues: [String: [String]] = [
+        "squat_spine_lean": ["Chest up", "Keep your torso upright"],
+        "squat_depth": ["Sink deeper", "Go a little lower"],
+        "squat_knee_asymmetry": ["Keep your knees even", "Don't let a knee cave in"],
+        "squat_hip_open": ["Open your hips more", "Sit back into your hips"],
+        "curl_body_swing": ["Stop swinging", "Use your arms, not momentum"],
+        "curl_incomplete_top": ["Curl higher", "Squeeze at the top"],
+        "curl_incomplete_bottom": ["Fully extend", "Straighten your arms at the bottom"],
+        "curl_elbow_drift": ["Keep your elbows pinned", "Elbows stay at your sides"],
+        "curl_leg_drive": ["Keep your legs still", "Don't use your legs"],
     ]
 
     static let encouragement: [String] = [

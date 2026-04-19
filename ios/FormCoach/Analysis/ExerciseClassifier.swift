@@ -1,5 +1,8 @@
 import Vision
 import CoreGraphics
+import os
+
+private let log = Logger(subsystem: "com.formcoach", category: "Classifier")
 
 enum ExerciseType: String, CaseIterable, Identifiable, Codable {
     case pushup, squat, deadlift, plank, lunge, jumpingJacks = "jumping_jacks", curl, unknown
@@ -64,50 +67,44 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// Real-time classifier restricted (for the demo) to squat, deadlift, or unknown.
+/// Real-time classifier for squat and bicep curl.
 ///
 /// Strategy:
-///  - Maintain a ~0.7 s rolling window of angle samples + wrist-y travel.
-///  - Each classification tick, extract signature features (spine uprightness,
-///    knee vs hip motion range, wrist vertical sweep).
+///  - Maintain a ~0.5 s rolling window of angle samples.
+///  - Extract signature features: elbow range (curls), knee range (squats),
+///    spine uprightness, and hip range.
 ///  - Require `stickyWindows` consecutive matching windows before flipping
 ///    `detectedExercise` so the label doesn't flicker during transitions.
+///  - After 2 confirmed reps, lock the classification so it never flips mid-set.
 final class ExerciseClassifier: ObservableObject {
     @Published var detectedExercise: ExerciseType = .unknown
-    /// True once the current label has been confirmed by the sticky filter.
-    /// Useful for UI that wants to show a "Detecting..." state early on.
     @Published var isStable: Bool = false
 
     // MARK: - Tunables
 
-    /// Window size in frames (~0.5 s at 30 fps).
-    private let windowSize = 15
-    /// Classify every N frames.
-    private let classifyEvery = 5
-    /// Consecutive windows that must agree before `detectedExercise` flips.
+    /// ~2 seconds at 30 fps — enough to capture a full rep.
+    private let windowSize = 60
+    private let classifyEvery = 10
     private let stickyWindows = 2
 
     // MARK: - State
 
     private struct Sample {
         let angles: BodyAngles
-        let wristY: CGFloat?      // mean of left/right wrist y (normalized 0-1)
-        let hipY: CGFloat?        // mean hip y
     }
 
     private var samples: [Sample] = []
     private var frameCount = 0
     private var candidateLabel: ExerciseType = .unknown
     private var candidateStreak: Int = 0
+    private var isLocked = false
 
     // MARK: - Public API
 
     func update(angles: BodyAngles, pose: BodyPose) {
-        samples.append(Sample(
-            angles: angles,
-            wristY: meanY(pose.point(for: .leftWrist), pose.point(for: .rightWrist)),
-            hipY:   meanY(pose.point(for: .leftHip),   pose.point(for: .rightHip))
-        ))
+        guard !isLocked else { return }
+
+        samples.append(Sample(angles: angles))
         if samples.count > windowSize { samples.removeFirst(samples.count - windowSize) }
 
         frameCount += 1
@@ -133,68 +130,70 @@ final class ExerciseClassifier: ObservableObject {
         }
     }
 
+    func lockClassification() {
+        isLocked = true
+    }
+
+    func unlock() {
+        isLocked = false
+    }
+
     func reset() {
         samples.removeAll()
         frameCount = 0
         candidateLabel = .unknown
         candidateStreak = 0
+        isLocked = false
         DispatchQueue.main.async {
             self.detectedExercise = .unknown
             self.isStable = false
         }
     }
 
-    // MARK: - Feature extraction
+    // MARK: - Classification
 
     private func classifyWindow() -> ExerciseType {
-        let spineVals = samples.compactMap { $0.angles.spine }
         let kneeVals  = samples.compactMap { $0.angles.kneeAngle }
         let hipVals   = samples.compactMap { $0.angles.hipAngle }
-        let wristYs   = samples.compactMap { $0.wristY }
+        let elbowVals = samples.compactMap { $0.angles.elbowAngle }
+        let spineVals = samples.compactMap { $0.angles.spine }
 
-        // Need enough data in the primary channels to say anything at all.
-        guard kneeVals.count >= windowSize / 3,
-              hipVals.count  >= windowSize / 3 else {
+        let minSamples = windowSize / 4
+        guard kneeVals.count >= minSamples || elbowVals.count >= minSamples else {
             return .unknown
         }
 
-        let spineMean = spineVals.isEmpty ? 180.0 : spineVals.reduce(0, +) / Double(spineVals.count)
-        let kneeRange = (kneeVals.max() ?? 0) - (kneeVals.min() ?? 0)
-        let hipRange  = (hipVals.max()  ?? 0) - (hipVals.min()  ?? 0)
-        let hipVsKnee = hipRange / max(kneeRange, 1)
-        let wristYTravel: Double = {
-            guard let mx = wristYs.max(), let mn = wristYs.min() else { return 0 }
-            return Double(mx - mn)
-        }()
+        let kneeRange  = (kneeVals.max() ?? 0) - (kneeVals.min() ?? 0)
+        let hipRange   = (hipVals.max()  ?? 0) - (hipVals.min()  ?? 0)
+        let elbowRange = (elbowVals.max() ?? 0) - (elbowVals.min() ?? 0)
+        let spineMean  = spineVals.isEmpty ? 180.0 : spineVals.reduce(0, +) / Double(spineVals.count)
 
-        // Movement floor: require at least some joint motion so a still person
-        // doesn't accidentally match. Kept deliberately loose.
-        if kneeRange < 8 && hipRange < 8 {
-            return .unknown
-        }
+        log.debug("classify: elbow=\(String(format:"%.0f", elbowRange)) knee=\(String(format:"%.0f", kneeRange)) hip=\(String(format:"%.0f", hipRange)) spine=\(String(format:"%.0f", spineMean))")
 
-        // Squat: upright torso, knee angle is the primary driver of the rep.
-        // hipVsKnee < 2.0 allows for some hip movement (normal in a deep squat)
-        // without requiring perfect isolation.
+        // Movement floor — person must be moving something.
+        if kneeRange < 5 && elbowRange < 5 { return .unknown }
+
+        // Curl: elbow-dominant, legs still.
+        let looksLikeCurl =
+            elbowRange > 20 &&
+            kneeRange < 20 &&
+            hipRange < 20
+
+        // Squat: significant knee or hip motion, upright torso.
         let looksLikeSquat =
-            spineMean > 135 &&
-            kneeRange > 10 &&
-            hipVsKnee < 2.0
+            (kneeRange > 10 || hipRange > 10) &&
+            spineMean > 120
 
-        // Deadlift: hip hinge clearly dominates over knee. Wrist travel is a
-        // soft signal only — unreliable at distance, so not required.
-        let looksLikeDeadlift =
-            hipRange > 10 &&
-            hipVsKnee > 1.3
+        log.debug("  curl=\(looksLikeCurl) squat=\(looksLikeSquat)")
 
-        switch (looksLikeSquat, looksLikeDeadlift) {
-        case (true, false):  return .squat
-        case (false, true):  return .deadlift
+        // Lower-body motion = knee + hip combined.
+        let lowerBodyRange = kneeRange + hipRange
+
+        switch (looksLikeCurl, looksLikeSquat) {
+        case (true, false):  return .curl
+        case (false, true):  return .squat
         case (true, true):
-            // Both match — tie-break. Wrist travel helps when visible;
-            // otherwise fall back to hip-vs-knee ratio.
-            if wristYTravel > 0.07 { return .deadlift }
-            return hipVsKnee > 1.7 ? .deadlift : .squat
+            return elbowRange > lowerBodyRange ? .curl : .squat
         default:             return .unknown
         }
     }

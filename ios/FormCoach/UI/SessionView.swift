@@ -1,35 +1,27 @@
 import SwiftUI
 
 struct SessionView: View {
-    /// Drives the whole session flow (recording → ending → report → dismissed).
-    /// Binding rather than callback so the view drives its own transitions
-    /// without racing against a parent `.dismiss()`.
     @Binding var stage: SessionStage?
-
-    /// The exercise the user chose before starting the session. This is the
-    /// single source of truth — no live classifier needed.
-    let selectedExercise: ExerciseType
 
     @StateObject private var camera       = CameraManager()
     @StateObject private var poseDetector = PoseDetector()
+    @StateObject private var analyzer     = ExerciseAnalyzer()
     @StateObject private var sessionMgr   = SessionManager()
     @StateObject private var audioCoach   = AudioCoach()
 
     @State private var activeExercise: ExerciseType = .unknown
-    @State private var repCounter = RepCounter(exercise: .unknown)
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
-    @State private var coachMessage: String = "Get into starting position"
+    @State private var coachMessage: String = "Get into position..."
     @State private var lastBubbleUpdate: TimeInterval = 0
+    @State private var skeletonColor: Color = .white
+    @State private var lastRepCount = 0
+    @State private var smoothedFormScore: Double = 100
 
-    @State private var posDetector = StartingPositionDetector()
-    @State private var skeletonColor: Color = KineticColor.orange
+    @State private var countdown: Int = 5
+    @State private var isCountingDown = true
 
-    // Tracks the extreme of the primary angle during current rep for the report.
-    @State private var peakAngle: Double = 0
-
-    private let comparator = FormComparator()
     @State private var scheduler = FeedbackScheduler()
 
     var body: some View {
@@ -47,6 +39,20 @@ struct SessionView: View {
                 .ignoresSafeArea()
 
                 SkeletonOverlay(pose: poseDetector.currentPose, viewSize: geo.size, color: skeletonColor)
+
+                if isCountingDown {
+                    Color.black.opacity(0.6).ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        Text("\(countdown)")
+                            .font(.system(size: 96, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText())
+                            .animation(.easeInOut(duration: 0.3), value: countdown)
+                        Text("Get into position")
+                            .font(KineticFont.heading(20))
+                            .foregroundStyle(KineticColor.textSecondary)
+                    }
+                }
 
                 VStack(spacing: 0) {
                     topBar
@@ -83,30 +89,44 @@ struct SessionView: View {
                 guard !isPaused else { return }
                 poseDetector?.process(sampleBuffer: buf, orientation: orientation)
             }
-            sessionMgr.startSession()
-            handleExerciseChange(to: selectedExercise)
+            startCountdown()
         }
         .onDisappear { camera.stop() }
         .onChange(of: poseDetector.currentPose) { _, pose in
-            guard let pose, !isPaused else { return }
+            guard let pose, !isPaused, !isCountingDown else { return }
             processFrame(pose)
         }
     }
 
-    // MARK: - Exercise setup
+    // MARK: - Countdown
 
-    private func handleExerciseChange(to new: ExerciseType) {
-        activeExercise = new
-        repCounter = RepCounter(exercise: new)
+    private func startCountdown() {
+        countdown = 5
+        isCountingDown = true
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            countdown -= 1
+            if countdown <= 0 {
+                timer.invalidate()
+                isCountingDown = false
+                coachMessage = "Start moving — I'll detect your exercise"
+                sessionMgr.startSession()
+            }
+        }
+    }
+
+    // MARK: - Exercise locked
+
+    private func handleExerciseLocked(_ exercise: ExerciseType) {
+        activeExercise = exercise
         repCount = 0
-        peakAngle = new.downThreshold
+        lastRepCount = 0
         formResult = nil
-        posDetector.reset()
-        skeletonColor = KineticColor.orange
+        smoothedFormScore = 100
 
-        coachMessage = new.startingPositionCue
-        sessionMgr.selectExercise(new)
-        if let line = scheduler.onExerciseStarted(new) {
+        skeletonColor = .green
+
+        sessionMgr.selectExercise(exercise)
+        if let line = scheduler.onExerciseStarted(exercise) {
             audioCoach.speak(line, priority: 9)
         }
     }
@@ -265,94 +285,94 @@ struct SessionView: View {
     // MARK: - Frame logic
 
     private func processFrame(_ pose: BodyPose) {
-        let angles = BodyAngles.from(pose: pose)
-        let exercise = activeExercise
-        guard exercise != .unknown else { return }
+        let snapshot = analyzer.update(pose: pose)
 
-        let (primaryAngle, phase): (Double?, String) = {
-            switch exercise {
-            case .pushup:
-                let a = angles.elbowAngle
-                return (a, (a ?? 180) < 120 ? "bottom" : "top")
-            case .squat, .lunge:
-                let a = angles.kneeAngle
-                return (a, (a ?? 180) < 120 ? "bottom" : "top")
-            case .deadlift:
-                let a = angles.hipAngle
-                return (a, (a ?? 180) < 130 ? "bottom" : "top")
-            case .plank:
-                return (angles.hipAngle, "hold")
-            case .jumpingJacks:
-                let a = angles.shoulderAngle
-                return (a, (a ?? 0) > 100 ? "open" : "closed")
-            case .curl:
-                let a = angles.elbowAngle
-                return (a, (a ?? 180) < 90 ? "top" : "bottom")
-            case .unknown:
-                return (nil, "top")
+        // Handle state transitions
+        let exercise = snapshot.state.exercise
+        if snapshot.state.isLocked && exercise != activeExercise {
+            handleExerciseLocked(exercise)
+        }
+        if !snapshot.state.isLocked && activeExercise != .unknown {
+            // Analyzer reset or unlocked
+            activeExercise = .unknown
+        }
+
+        // Update form result (only meaningful when locked)
+        formResult = snapshot.state.isLocked ? snapshot.formResult : nil
+
+        // Detect new reps
+        if snapshot.repCount > lastRepCount && snapshot.state.isLocked {
+            let newReps = snapshot.repCount - lastRepCount
+            lastRepCount = snapshot.repCount
+            repCount = snapshot.repCount
+
+            for _ in 0..<newReps {
+                sessionMgr.recordRep(
+                    score: snapshot.formResult.score,
+                    corrections: snapshot.formResult.corrections,
+                    peakAngle: 0
+                )
             }
-        }()
 
-        // Update starting-position detector and handle lock transition.
-        let prevState = posDetector.state
-        let currentState = posDetector.update(angles: angles, exercise: exercise)
-
-        if prevState != .locked, currentState == .locked {
-            // First frame of lock: green flash then revert.
-            skeletonColor = .green
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                skeletonColor = KineticColor.orange
-            }
-            if let line = scheduler.onPositionLocked() {
-                audioCoach.speak(line, priority: 8)
+            if let line = scheduler.onRepCompleted(score: snapshot.formResult.score) {
+                audioCoach.speak(line, priority: 7)
             }
         }
 
-        let result = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
-        formResult = result
-
-        // Per-frame silent accumulation + optional mid-rep cue (only once locked).
-        if currentState == .locked,
-           let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+        // Mid-rep form cues (only when locked)
+        if snapshot.state.isLocked,
+           let line = scheduler.onFrame(result: snapshot.formResult, repPhase: .goingDown) {
             audioCoach.speak(line, priority: 6)
         }
 
-        // Track peak and count reps only after position is confirmed.
-        if currentState == .locked, let angle = primaryAngle {
-            switch exercise {
-            case .jumpingJacks, .deadlift:
-                peakAngle = max(peakAngle, angle)
-            case .curl:
-                peakAngle = min(peakAngle, angle)
-            default:
-                peakAngle = min(peakAngle, angle)
-            }
-
-            let completed = repCounter.update(primaryAngle: angle)
-            if completed {
-                repCount = repCounter.repCount
-                sessionMgr.recordRep(score: result.score,
-                                     corrections: result.corrections,
-                                     peakAngle: peakAngle)
-                peakAngle = exercise.downThreshold
-
-                if let line = scheduler.onRepCompleted(score: result.score) {
-                    audioCoach.speak(line, priority: 7)
-                }
+        // Speak persistent form issues from FormFeedbackEngine
+        if snapshot.state.isLocked, let worst = snapshot.formIssues.max(by: { $0.severity < $1.severity }) {
+            if let line = scheduler.onFormIssue(worst) {
+                audioCoach.speak(line, priority: 5)
             }
         }
 
-        // Throttle the visual bubble to ~2 Hz so it doesn't flicker at 30 fps.
+        // Score-based fallback: if form drops and no engine issue fired,
+        // speak the top FormComparator correction directly
+        if snapshot.state.isLocked,
+           snapshot.formIssues.isEmpty,
+           smoothedFormScore < 60,
+           let top = snapshot.formResult.corrections.first {
+            if let line = scheduler.onFormCorrectionFallback(top.message) {
+                audioCoach.speak(line, priority: 4)
+            }
+        }
+
+        // Update skeleton color based on smoothed form score
+        if snapshot.state.isLocked {
+            let raw = snapshot.formResult.score
+            smoothedFormScore = smoothedFormScore * 0.85 + raw * 0.15
+            if smoothedFormScore > 70 {
+                skeletonColor = .green
+            } else if smoothedFormScore > 45 {
+                skeletonColor = .yellow
+            } else {
+                skeletonColor = .red
+            }
+        } else {
+            skeletonColor = .white
+        }
+
+        // Throttle coach bubble to ~2 Hz
         let now = CACurrentMediaTime()
         if now - lastBubbleUpdate >= 0.5 {
             lastBubbleUpdate = now
-            switch currentState {
-            case .waiting:
-                coachMessage = exercise.startingPositionCue
-            case .approaching:
-                coachMessage = "Hold still… almost there"
+            switch snapshot.state {
+            case .unknown:
+                coachMessage = "Start moving — I'll detect your exercise"
+            case .candidate(let e):
+                coachMessage = "Looks like \(e.displayName)… keep going"
             case .locked:
-                coachMessage = scheduler.visualHint(result: result)
+                if let worst = snapshot.formIssues.max(by: { $0.severity < $1.severity }) {
+                    coachMessage = worst.message
+                } else {
+                    coachMessage = scheduler.visualHint(result: snapshot.formResult)
+                }
             }
         }
     }
@@ -381,15 +401,18 @@ struct SessionView: View {
     // MARK: - Helpers
 
     private var formStatus: (label: String, color: Color) {
-        let s = formResult?.score ?? 0
-        if s > 80 { return ("GOOD", KineticColor.success) }
-        if s > 55 { return ("OK",   KineticColor.warning) }
-        if s > 0  { return ("FIX",  KineticColor.danger)  }
-        return ("READY", KineticColor.textSecondary)
+        let s = smoothedFormScore
+        guard activeExercise != .unknown else { return ("READY", KineticColor.textSecondary) }
+        if s > 70 { return ("GOOD", KineticColor.success) }
+        if s > 45 { return ("OK",   KineticColor.warning) }
+        return ("FIX",  KineticColor.danger)
     }
 
     private var exerciseStatus: (label: String, color: Color, icon: String) {
-        (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
+        if activeExercise == .unknown {
+            return ("DETECTING...", KineticColor.textSecondary, "questionmark")
+        }
+        return (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
     }
 
     private func formatted(_ seconds: Int) -> String {
