@@ -218,6 +218,11 @@ private enum Phrases {
             "Set your back, brace your core, then lift.",
             "Shoulders over the bar, neutral spine. Go.",
         ],
+        "curl": [
+            "Elbows pinned to your sides. Control the weight up and down.",
+            "Stand tall, squeeze the biceps — smooth curls, no swing.",
+            "Shoulders back, elbows fixed. Let's curl.",
+        ],
     ]
 
     static let genericStart: [String] = [
@@ -287,6 +292,21 @@ private enum Phrases {
             "Don't squat the pull — hinge",
             "Hips back, not down",
             "Push the floor away, hips lead",
+        ],
+        "curl:elbowAngle_high": [
+            "Curl higher",
+            "Squeeze all the way up",
+            "Full contraction at the top",
+        ],
+        "curl:elbowAngle_low": [
+            "Full extension at the bottom",
+            "Straighten the arms",
+            "All the way down",
+        ],
+        "curl:spineAngle_low": [
+            "Stop swinging",
+            "Keep your torso still",
+            "No leaning back",
         ],
     ]
 

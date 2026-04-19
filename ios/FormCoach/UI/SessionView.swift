@@ -1,4 +1,6 @@
 import SwiftUI
+import Vision
+import QuartzCore
 
 struct SessionView: View {
     /// Drives the whole session flow (recording → ending → report → dismissed).
@@ -15,12 +17,23 @@ struct SessionView: View {
     @StateObject private var sessionMgr   = SessionManager()
     @StateObject private var audioCoach   = AudioCoach()
 
+<<<<<<< HEAD
+=======
+    /// After recognition locks, the classifier stops; this is the active drill.
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
     @State private var activeExercise: ExerciseType = .unknown
+    @State private var recognitionLocked = false
     @State private var repCounter = RepCounter(exercise: .unknown)
     @State private var formResult: FormResult?
     @State private var repCount = 0
     @State private var isPaused = false
-    @State private var coachMessage: String = "Get into starting position"
+    @State private var coachMessage = "Detecting exercise — show a squat, deadlift, or curl"
+    /// Curl-only: reps count only after arms are stable and highlighted green.
+    @State private var curlRepUnlocked = false
+    @State private var curlReadyFrames = 0
+    @State private var elbowTracker = ElbowStabilityTracker()
+    @State private var lastElbowCueTime: TimeInterval = 0
+    @State private var jointHighlightStates: [VNHumanBodyPoseObservation.JointName: JointVisualState] = [:]
     @State private var lastBubbleUpdate: TimeInterval = 0
 
     @State private var posDetector = StartingPositionDetector()
@@ -46,7 +59,16 @@ struct SessionView: View {
                 )
                 .ignoresSafeArea()
 
+<<<<<<< HEAD
                 SkeletonOverlay(pose: poseDetector.currentPose, viewSize: geo.size, color: skeletonColor)
+=======
+                SkeletonOverlay(
+                    pose: poseDetector.currentPose,
+                    viewSize: geo.size,
+                    exercise: recognitionLocked ? activeExercise : .unknown,
+                    jointStates: jointHighlightStates
+                )
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
 
                 VStack(spacing: 0) {
                     topBar
@@ -95,17 +117,38 @@ struct SessionView: View {
 
     // MARK: - Exercise setup
 
+<<<<<<< HEAD
+=======
+    /// Called once when recognition locks onto squat, deadlift, or curl.
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
     private func handleExerciseChange(to new: ExerciseType) {
         activeExercise = new
         repCounter = RepCounter(exercise: new)
         repCount = 0
         peakAngle = new.downThreshold
         formResult = nil
+<<<<<<< HEAD
         posDetector.reset()
         skeletonColor = KineticColor.orange
 
         coachMessage = new.startingPositionCue
+=======
+        curlRepUnlocked = false
+        curlReadyFrames = 0
+        elbowTracker = ElbowStabilityTracker()
+        jointHighlightStates = [:]
+
+        if new == .unknown {
+            coachMessage = "Exercise not recognized — try squat, deadlift, or bicep curl"
+            return
+        }
+
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
         sessionMgr.selectExercise(new)
+        coachMessage = new == .curl
+            ? "Curl mode — keep elbows tucked; green means go"
+            : "Locked in — focus on form"
+
         if let line = scheduler.onExerciseStarted(new) {
             audioCoach.speak(line, priority: 9)
         }
@@ -266,8 +309,29 @@ struct SessionView: View {
 
     private func processFrame(_ pose: BodyPose) {
         let angles = BodyAngles.from(pose: pose)
+<<<<<<< HEAD
         let exercise = activeExercise
         guard exercise != .unknown else { return }
+=======
+
+        if !classifier.recognitionSuspended {
+            classifier.update(angles: angles, pose: pose)
+        }
+
+        if !recognitionLocked,
+           classifier.isStable,
+           classifier.detectedExercise != .unknown {
+            recognitionLocked = true
+            classifier.suspendRecognition()
+            handleExerciseChange(to: classifier.detectedExercise)
+        }
+
+        let exercise = activeExercise
+        guard exercise == .squat || exercise == .deadlift || exercise == .curl else {
+            jointHighlightStates = [:]
+            return
+        }
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
 
         let (primaryAngle, phase): (Double?, String) = {
             switch exercise {
@@ -293,6 +357,7 @@ struct SessionView: View {
             }
         }()
 
+<<<<<<< HEAD
         // Update starting-position detector and handle lock transition.
         let prevState = posDetector.state
         let currentState = posDetector.update(angles: angles, exercise: exercise)
@@ -319,6 +384,60 @@ struct SessionView: View {
 
         // Track peak and count reps only after position is confirmed.
         if currentState == .locked, let angle = primaryAngle {
+=======
+        let baseResult = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
+        var result = baseResult
+
+        if exercise == .curl {
+            var t = elbowTracker
+            let stable = t.update(pose: pose)
+            elbowTracker = t
+
+            let unstable = !stable.leftOK || !stable.rightOK
+            updateCurlJointHighlights(leftOK: stable.leftOK, rightOK: stable.rightOK, score: baseResult.score)
+
+            if unstable {
+                let now = CACurrentMediaTime()
+                if now - lastElbowCueTime >= 2.2 {
+                    lastElbowCueTime = now
+                    audioCoach.speak("Keep elbows back in place", priority: 8)
+                    coachMessage = "Keep elbows back in place"
+                }
+                result = FormResult(
+                    score: max(0, baseResult.score - 25),
+                    corrections: [FormCorrection(joint: "elbowStability", message: "Keep elbows back in place", severity: 0.85)] + baseResult.corrections,
+                    phase: phase
+                )
+            }
+
+            formResult = result
+
+            if !curlRepUnlocked {
+                if stable.leftOK && stable.rightOK && baseResult.score > 52 {
+                    curlReadyFrames += 1
+                    if curlReadyFrames >= 12 {
+                        curlRepUnlocked = true
+                        audioCoach.speak("Begin your reps", priority: 7)
+                        coachMessage = "Begin your reps"
+                    }
+                } else {
+                    curlReadyFrames = 0
+                }
+            }
+
+            if !unstable, let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+                audioCoach.speak(line, priority: 6)
+            }
+        } else {
+            jointHighlightStates = [:]
+            formResult = result
+            if let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+                audioCoach.speak(line, priority: 6)
+            }
+        }
+
+        if let angle = primaryAngle {
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
             switch exercise {
             case .jumpingJacks, .deadlift:
                 peakAngle = max(peakAngle, angle)
@@ -328,6 +447,7 @@ struct SessionView: View {
                 peakAngle = min(peakAngle, angle)
             }
 
+<<<<<<< HEAD
             let completed = repCounter.update(primaryAngle: angle)
             if completed {
                 repCount = repCounter.repCount
@@ -335,13 +455,28 @@ struct SessionView: View {
                                      corrections: result.corrections,
                                      peakAngle: peakAngle)
                 peakAngle = exercise.downThreshold
+=======
+            let allowReps = exercise != .curl || curlRepUnlocked
+            if allowReps {
+                let completed = repCounter.update(primaryAngle: angle)
+                if completed {
+                    repCount = repCounter.repCount
+                    calories += 1
+                    let snap = formResult ?? result
+                    sessionMgr.recordRep(score: snap.score,
+                                         corrections: snap.corrections,
+                                         peakAngle: peakAngle)
+                    peakAngle = exercise.downThreshold
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
 
-                if let line = scheduler.onRepCompleted(score: result.score) {
-                    audioCoach.speak(line, priority: 7)
+                    if let line = scheduler.onRepCompleted(score: snap.score) {
+                        audioCoach.speak(line, priority: 7)
+                    }
                 }
             }
         }
 
+<<<<<<< HEAD
         // Throttle the visual bubble to ~2 Hz so it doesn't flicker at 30 fps.
         let now = CACurrentMediaTime()
         if now - lastBubbleUpdate >= 0.5 {
@@ -353,8 +488,47 @@ struct SessionView: View {
                 coachMessage = "Hold still… almost there"
             case .locked:
                 coachMessage = scheduler.visualHint(result: result)
+=======
+        let hintTime = CACurrentMediaTime()
+        if hintTime - lastBubbleUpdate >= 0.5 {
+            lastBubbleUpdate = hintTime
+            let fr = formResult ?? result
+            let elbowCue = fr.corrections.contains { $0.joint == "elbowStability" }
+            if !(exercise == .curl && elbowCue) {
+                coachMessage = scheduler.visualHint(result: fr)
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
             }
         }
+    }
+
+    private func updateCurlJointHighlights(leftOK: Bool, rightOK: Bool, score: Double) {
+        typealias JN = VNHumanBodyPoseObservation.JointName
+        var m: [JN: JointVisualState] = [:]
+        let scoreGood = score > 48 || curlRepUnlocked
+        let leftGreen = leftOK && scoreGood
+        let rightGreen = rightOK && scoreGood
+
+        if !leftOK {
+            m[.leftShoulder] = .bad
+            m[.leftElbow] = .bad
+            m[.leftWrist] = .bad
+        } else if leftGreen {
+            m[.leftShoulder] = .good
+            m[.leftElbow] = .good
+            m[.leftWrist] = .good
+        }
+
+        if !rightOK {
+            m[.rightShoulder] = .bad
+            m[.rightElbow] = .bad
+            m[.rightWrist] = .bad
+        } else if rightGreen {
+            m[.rightShoulder] = .good
+            m[.rightElbow] = .good
+            m[.rightWrist] = .good
+        }
+
+        jointHighlightStates = m
     }
 
     private func endSession() {
@@ -389,7 +563,34 @@ struct SessionView: View {
     }
 
     private var exerciseStatus: (label: String, color: Color, icon: String) {
+<<<<<<< HEAD
         (activeExercise.displayName.uppercased(), KineticColor.success, activeExercise.icon)
+=======
+        if recognitionLocked {
+            switch activeExercise {
+            case .squat:
+                return ("SQUAT", KineticColor.success, "figure.cooldown")
+            case .deadlift:
+                return ("DEADLIFT", KineticColor.success, "figure.strengthtraining.functional")
+            case .curl:
+                return ("BICEP CURL", KineticColor.success, "dumbbell.fill")
+            default:
+                break
+            }
+        }
+        switch classifier.detectedExercise {
+        case .squat:
+            return ("SQUAT", KineticColor.success, "figure.cooldown")
+        case .deadlift:
+            return ("DEADLIFT", KineticColor.success, "figure.strengthtraining.functional")
+        case .curl:
+            return ("CURL", KineticColor.success, "dumbbell.fill")
+        case .unknown where classifier.isStable:
+            return ("NOT RECOGNIZED", KineticColor.danger, "questionmark")
+        default:
+            return ("DETECTING…", KineticColor.textSecondary, "sparkle.magnifyingglass")
+        }
+>>>>>>> 3e07889 (feature: classify exercise by logical positions)
     }
 
     private func formatted(_ seconds: Int) -> String {
