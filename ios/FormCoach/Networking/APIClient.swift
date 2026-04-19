@@ -7,7 +7,7 @@ final class APIClient {
         UserDefaults.standard.string(forKey: "apiBaseURL") ?? Self.defaultBaseURL
     }
 
-    static let defaultBaseURL = "http://localhost:8000/api"
+    static let defaultBaseURL = "http://10.28.245.240:8000/api"
 
     private let session = URLSession.shared
     private let decoder = JSONDecoder()
