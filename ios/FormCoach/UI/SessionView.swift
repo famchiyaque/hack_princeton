@@ -1,5 +1,4 @@
 import SwiftUI
-import Vision
 import QuartzCore
 
 struct SessionView: View {
@@ -44,7 +43,6 @@ struct SessionView: View {
                     pose: poseDetector.currentPose,
                     viewSize: geo.size,
                     exercise: activeExercise,
-                    jointStates: jointHighlightStates,
                     color: skeletonColor
                 )
 
@@ -103,9 +101,6 @@ struct SessionView: View {
         .onChange(of: poseDetector.currentPose) { _, pose in
             guard let pose, !isPaused, !isCountingDown else { return }
             processFrame(pose)
-        }
-        .onChange(of: classifier.detectedExercise) { _, new in
-            handleExerciseChange(to: new)
         }
     }
 
@@ -384,26 +379,6 @@ struct SessionView: View {
                 }
             }
         }
-    }
-
-    private func updateCurlJointHighlights(leftOK: Bool, rightOK: Bool, score: Double) {
-        typealias JN = VNHumanBodyPoseObservation.JointName
-        var m: [JN: JointVisualState] = [:]
-        let scoreGood = score > 48 || curlRepUnlocked
-
-        if !leftOK {
-            m[.leftShoulder] = .bad; m[.leftElbow] = .bad; m[.leftWrist] = .bad
-        } else if leftOK && scoreGood {
-            m[.leftShoulder] = .good; m[.leftElbow] = .good; m[.leftWrist] = .good
-        }
-
-        if !rightOK {
-            m[.rightShoulder] = .bad; m[.rightElbow] = .bad; m[.rightWrist] = .bad
-        } else if rightOK && scoreGood {
-            m[.rightShoulder] = .good; m[.rightElbow] = .good; m[.rightWrist] = .good
-        }
-
-        jointHighlightStates = m
     }
 
     private func endSession() {

@@ -54,7 +54,7 @@ final class AuthManager: ObservableObject {
     func signInWithGoogle() async throws {
         session = try await client.auth.signInWithOAuth(
             provider: .google,
-            redirectTo: URL(string: "\(Bundle.main.bundleIdentifier ?? "com.formcoach.app")://login-callback")
+            redirectTo: URL(string: "\(Bundle.main.bundleIdentifier ?? "com.rasul.formcoach")://login-callback")
         )
     }
 
