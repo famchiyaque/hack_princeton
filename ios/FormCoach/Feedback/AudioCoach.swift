@@ -45,7 +45,12 @@ final class AudioCoach: NSObject, ObservableObject {
     /// Download all pre-generated phrase audio from the backend in one shot.
     /// Call this when a session is about to start (e.g. from SessionView.onAppear).
     func prefetch() {
-        guard let url = URL(string: "\(backendBase)/api/tts/bundle") else { return }
+        let urlString = "\(backendBase)/api/tts/bundle"
+        log.info("TTS prefetch starting: \(urlString, privacy: .public)")
+        guard let url = URL(string: urlString) else {
+            log.error("TTS prefetch: invalid URL")
+            return
+        }
 
         URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let self else { return }
@@ -107,31 +112,51 @@ final class AudioCoach: NSObject, ObservableObject {
         armWatchdog()
 
         if let cachedData = audioCache[next.message] {
+            log.debug("Playing from cache: \(next.message, privacy: .public)")
             playMP3(cachedData, fallbackText: next.message)
         } else if cacheReady {
+            log.debug("Cache ready but phrase missing, fetching: \(next.message, privacy: .public)")
             fetchAndPlay(next.message)
         } else {
-            speakLocally(next.message)
+            // Cache still loading — try the single-phrase endpoint instead of
+            // falling back to the Apple voice.
+            log.debug("Cache not ready, fetching single phrase: \(next.message, privacy: .public)")
+            fetchAndPlay(next.message)
         }
     }
 
     private func playMP3(_ data: Data, fallbackText: String) {
-        // Re-activate the audio session right before playing — the camera
-        // startup can yank it away silently on first launch.
-        try? AVAudioSession.sharedInstance().setActive(true, options: [])
+        configureAudioSession()
 
-        guard let player = try? AVAudioPlayer(data: data) else {
+        // Write to a temp file — AVAudioPlayer(contentsOf:) is more reliable
+        // than init(data:) when the audio session is shared with AVCaptureSession.
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".mp3")
+        do {
+            try data.write(to: tmp)
+        } catch {
+            log.warning("Failed to write temp MP3: \(error.localizedDescription, privacy: .public)")
+            speakLocally(fallbackText)
+            return
+        }
+
+        guard let player = try? AVAudioPlayer(contentsOf: tmp) else {
             log.warning("AVAudioPlayer init failed, falling back to local TTS")
             speakLocally(fallbackText)
             return
         }
         audioPlayer = player
         player.delegate = self
-        let started = player.prepareToPlay() && player.play()
-        if !started {
-            log.warning("AVAudioPlayer.play() returned false, falling back to local TTS")
-            audioPlayer = nil
-            speakLocally(fallbackText)
+        player.volume = 1.0
+        player.prepareToPlay()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self else { return }
+            if !player.play() {
+                log.warning("AVAudioPlayer.play() returned false, falling back to local TTS")
+                self.audioPlayer = nil
+                self.speakLocally(fallbackText)
+            }
         }
     }
 
