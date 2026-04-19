@@ -17,6 +17,7 @@ class _Sample:
     angles: BodyAngles
     wrist_y: Optional[float]
     hip_y: Optional[float]
+    shoulder_y: Optional[float]
 
 
 class ExerciseClassifier:
@@ -43,10 +44,13 @@ class ExerciseClassifier:
         rw = joints.get("rightWrist")
         lh = joints.get("leftHip")
         rh = joints.get("rightHip")
+        ls = joints.get("leftShoulder")
+        rs = joints.get("rightShoulder")
         self._samples.append(_Sample(
             angles=angles,
             wrist_y=self._mean_y(lw.y if lw else None, rw.y if rw else None),
             hip_y=self._mean_y(lh.y if lh else None, rh.y if rh else None),
+            shoulder_y=self._mean_y(ls.y if ls else None, rs.y if rs else None),
         ))
 
         self._frame_count += 1
@@ -83,6 +87,8 @@ class ExerciseClassifier:
         hip_vals   = [s.angles.hipAngle for s in self._samples if s.angles.hipAngle is not None]
         wrist_ys   = [s.wrist_y for s in self._samples if s.wrist_y is not None]
         elbow_vals = [s.angles.elbowAngle for s in self._samples if s.angles.elbowAngle is not None]
+        shoulder_ys = [s.shoulder_y for s in self._samples if s.shoulder_y is not None]
+        hip_ys     = [s.hip_y for s in self._samples if s.hip_y is not None]
 
         if len(knee_vals) < self.WINDOW_SIZE // 3 or len(hip_vals) < self.WINDOW_SIZE // 3:
             return ExerciseType.UNKNOWN
@@ -94,11 +100,32 @@ class ExerciseClassifier:
         wrist_travel = (max(wrist_ys) - min(wrist_ys)) if wrist_ys else 0
         elbow_range = (max(elbow_vals) - min(elbow_vals)) if elbow_vals else 0
 
+        # Torso orientation in image-space: ~0 when horizontal (push-up/plank),
+        # large when upright (standing/curl/squat/deadlift). Positive means
+        # shoulders are lower than hips in the frame; we take abs.
+        if shoulder_ys and hip_ys:
+            shoulder_hip_dy = abs(
+                sum(shoulder_ys) / len(shoulder_ys) - sum(hip_ys) / len(hip_ys)
+            )
+        else:
+            shoulder_hip_dy = 1.0  # unknown → assume upright
+
         if knee_range < 8 and hip_range < 8 and elbow_range < 8:
             return ExerciseType.UNKNOWN
 
+        # Push-up: horizontal torso + elbow flexion drives the rep.
+        # Checked before curl since both feature high elbow range.
+        looks_like_pushup = (
+            shoulder_hip_dy < 0.15
+            and elbow_range > 20
+            and knee_range < 20
+        )
+        if looks_like_pushup:
+            return ExerciseType.PUSHUP
+
         looks_like_curl = (
-            elbow_range > 14
+            shoulder_hip_dy > 0.2        # upright torso (rules out push-up)
+            and elbow_range > 14
             and knee_range < 28
             and hip_range < 32
             and spine_mean > 115

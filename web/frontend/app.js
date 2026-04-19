@@ -29,6 +29,50 @@ const correctionEl = document.getElementById("correction");
 const statusEl = document.getElementById("status");
 const endBtn = document.getElementById("end-btn");
 const againBtn = document.getElementById("again-btn");
+const muteBtn = document.getElementById("mute-btn");
+
+// ── AudioCoach ──────────────────────────────────────────────────────────
+// Speaks form corrections via the browser's SpeechSynthesis API.
+// Rate-limited so it doesn't nag: same message every 4s, different every 1.5s.
+const coach = {
+  muted: false,
+  lastMessage: null,
+  lastSpokenAt: 0,
+  voice: null,
+  severityFloor: 0.4,
+  init() {
+    // Warm up the voice list (some browsers load async).
+    const pick = () => {
+      const voices = speechSynthesis.getVoices();
+      this.voice = voices.find(v => v.lang && v.lang.startsWith("en")) || voices[0] || null;
+    };
+    pick();
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = pick;
+    }
+  },
+  speak(message, severity) {
+    if (this.muted || !message) return;
+    if (severity < this.severityFloor) return;
+    const now = performance.now();
+    const same = message === this.lastMessage;
+    const gap = same ? 4000 : 1500;
+    if (now - this.lastSpokenAt < gap) return;
+    if (!same && speechSynthesis.speaking) return;
+    const u = new SpeechSynthesisUtterance(message);
+    u.rate = 1.15;
+    u.pitch = 1.0;
+    if (this.voice) u.voice = this.voice;
+    speechSynthesis.speak(u);
+    this.lastMessage = message;
+    this.lastSpokenAt = now;
+  },
+  setMuted(m) {
+    this.muted = m;
+    if (m) speechSynthesis.cancel();
+  },
+};
+coach.init();
 
 let ws = null;
 let sending = false;          // backpressure: skip frame if previous in flight
@@ -100,15 +144,20 @@ function updateHud(msg) {
   scoreEl.textContent = (msg.score != null && msg.score > 0) ? Math.round(msg.score) : "—";
 
   if (msg.corrections && msg.corrections.length > 0 && msg.corrections[0].severity > 0.3) {
-    correctionEl.textContent = msg.corrections[0].message;
+    const top = msg.corrections[0];
+    correctionEl.textContent = top.message;
     correctionEl.classList.add("visible");
     correctionTimer = 30;
+    coach.speak(top.message, top.severity);
   } else if (correctionTimer > 0) {
     correctionTimer--;
     if (correctionTimer === 0) correctionEl.classList.remove("visible");
   }
   drawSkeleton(msg.landmarks || {});
 }
+
+// Joints that get a body-dot drawn (all bone endpoints). Head is handled separately.
+const BODY_JOINTS = new Set(BONES.flat());
 
 function drawSkeleton(landmarks) {
   ctx.clearRect(0, 0, overlay.width, overlay.height);
@@ -127,11 +176,31 @@ function drawSkeleton(landmarks) {
     ctx.stroke();
   }
 
+  // Head: one dot at the nose, connected to the shoulder midpoint if possible.
+  const nose = landmarks.nose;
+  const ls = landmarks.leftShoulder, rs = landmarks.rightShoulder;
+  if (nose && ls && rs) {
+    const mx = ((ls.x + rs.x) / 2) * W;
+    const my = ((ls.y + rs.y) / 2) * H;
+    ctx.beginPath();
+    ctx.moveTo(nose.x * W, nose.y * H);
+    ctx.lineTo(mx, my);
+    ctx.stroke();
+  }
+
+  // Body joint dots (shoulders, elbows, wrists, hips, knees, ankles).
   ctx.fillStyle = "#fff";
-  for (const name in landmarks) {
+  for (const name of BODY_JOINTS) {
     const p = landmarks[name];
+    if (!p) continue;
     ctx.beginPath();
     ctx.arc(p.x * W, p.y * H, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Single head dot.
+  if (nose) {
+    ctx.beginPath();
+    ctx.arc(nose.x * W, nose.y * H, 7, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -173,6 +242,21 @@ function showReport(r) {
 endBtn.addEventListener("click", () => {
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify({ type: "end" }));
+  }
+});
+
+muteBtn.addEventListener("click", () => {
+  const next = !coach.muted;
+  coach.setMuted(next);
+  muteBtn.textContent = next ? "🔇" : "🔊";
+  muteBtn.classList.toggle("muted", next);
+  muteBtn.title = next ? "Un-mute coach" : "Mute coach";
+  // Chrome gesture-unlocks speechSynthesis after this click; a silent utterance
+  // here guarantees the first real correction plays without delay.
+  if (!next) {
+    const warm = new SpeechSynthesisUtterance(" ");
+    warm.volume = 0;
+    speechSynthesis.speak(warm);
   }
 });
 
