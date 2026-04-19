@@ -32,6 +32,16 @@ enum ExerciseType: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    var assetName: String? {
+        switch self {
+        case .squat:    "squat"
+        case .deadlift: "deadlift"
+        case .pushup:   "pushup"
+        case .curl:     "bicep_curl"
+        default:        nil
+        }
+    }
+
     /// Thresholds used by the RepCounter for this exercise.
     var downThreshold: Double {
         switch self {
