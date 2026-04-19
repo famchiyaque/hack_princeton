@@ -11,25 +11,56 @@ from auth import get_current_user
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 SYSTEM_PROMPT = (
-    "You are a concise, encouraging fitness coach. "
-    "Summarize this workout session in 2-3 sentences. "
-    "Highlight what went well and one thing to improve next time."
+    "You are a concise, knowledgeable strength & conditioning coach. "
+    "Given a workout session's raw data (exercises, reps, per-exercise form score "
+    "on a 0-100 scale, duration, and counted form corrections by joint/type), "
+    "produce a short post-session debrief with three clearly labeled parts:\n"
+    "1. Recap — 1-2 sentences summarizing volume and overall execution, "
+    "referencing the actual numbers (reps, form scores, duration).\n"
+    "2. Risks — 1-2 sentences calling out the most likely injury or overuse "
+    "risks implied by the recurring corrections and low form scores "
+    "(e.g. knee valgus on squats, lumbar flexion on deadlifts, shoulder "
+    "impingement on presses). Be specific about which exercise and which "
+    "joint/pattern is at risk. If the data genuinely shows no concerning "
+    "pattern, say so instead of inventing one.\n"
+    "3. Next focus — 1 sentence on the single highest-priority cue or drill "
+    "to address the biggest risk next session.\n"
+    "Stay encouraging but honest. Do not exceed ~90 words total. "
+    "Ground every claim in the numbers provided — never fabricate reps, "
+    "scores, or corrections that aren't in the data."
 )
 
 
 def _build_prompt(session: Session, exercises_map: dict[str, str]) -> str:
+    total_seconds = session.total_duration or 0
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
     lines = [
-        f"Duration: {(session.total_duration or 0) // 60} minutes",
+        "Workout session data:",
+        f"- Total duration: {minutes}m {seconds}s",
+        f"- Exercises performed: {len(session.exercises)}",
         "",
+        "Per-exercise breakdown (form score is 0-100, higher = better):",
     ]
     for ex in session.exercises:
         name = exercises_map.get(ex.exercise_id, ex.exercise_id)
         corrections = [CorrectionCount(**c) for c in (ex.corrections or [])]
-        correction_str = ", ".join(f"{c.type} x{c.count}" for c in corrections)
-        lines.append(
-            f"- {name}: {ex.reps} reps, form score {ex.avg_score:.0f}/100, "
-            f"corrections: {correction_str or 'none'}"
+        correction_str = (
+            ", ".join(f"{c.type} x{c.count}" for c in corrections) or "none"
         )
+        ex_minutes = (ex.duration or 0) // 60
+        ex_seconds = (ex.duration or 0) % 60
+        lines.append(
+            f"- {name}: {ex.reps} reps over {ex_minutes}m {ex_seconds}s, "
+            f"avg form score {ex.avg_score:.0f}/100, "
+            f"corrections triggered: {correction_str}"
+        )
+    lines.append("")
+    lines.append(
+        "Write the Recap / Risks / Next focus debrief described in the system "
+        "prompt. Pay particular attention to the corrections list — repeated "
+        "corrections at the same joint are the strongest signal of injury risk."
+    )
     return "\n".join(lines)
 
 
@@ -58,7 +89,7 @@ def session_summary(
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            max_tokens=256,
+            max_tokens=400,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
