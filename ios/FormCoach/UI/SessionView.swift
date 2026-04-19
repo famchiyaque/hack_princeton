@@ -23,6 +23,13 @@ struct SessionView: View {
     @State private var coachMessage: String = "Get into starting position"
     @State private var lastBubbleUpdate: TimeInterval = 0
 
+<<<<<<< Updated upstream
+=======
+    @State private var posDetector = StartingPositionDetector()
+    @State private var skeletonColor: Color = KineticColor.orange
+
+    // Tracks the extreme of the primary angle during current rep for the report.
+>>>>>>> Stashed changes
     @State private var peakAngle: Double = 0
 
     private let comparator = FormComparator()
@@ -42,7 +49,7 @@ struct SessionView: View {
                 )
                 .ignoresSafeArea()
 
-                SkeletonOverlay(pose: poseDetector.currentPose, viewSize: geo.size)
+                SkeletonOverlay(pose: poseDetector.currentPose, viewSize: geo.size, color: skeletonColor)
 
                 VStack(spacing: 0) {
                     topBar
@@ -97,7 +104,18 @@ struct SessionView: View {
         repCount = 0
         peakAngle = new.downThreshold
         formResult = nil
+        posDetector.reset()
+        skeletonColor = KineticColor.orange
 
+<<<<<<< Updated upstream
+=======
+        if new == .unknown {
+            coachMessage = "Exercise not recognized — try squat or deadlift"
+            return
+        }
+
+        coachMessage = new.startingPositionCue
+>>>>>>> Stashed changes
         sessionMgr.selectExercise(new)
         if let line = scheduler.onExerciseStarted(new) {
             audioCoach.speak(line, priority: 9)
@@ -286,16 +304,32 @@ struct SessionView: View {
             }
         }()
 
+        // Update starting-position detector and handle lock transition.
+        let prevState = posDetector.state
+        let currentState = posDetector.update(angles: angles, exercise: exercise)
+
+        if prevState != .locked, currentState == .locked {
+            // First frame of lock: green flash then revert.
+            skeletonColor = .green
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                skeletonColor = KineticColor.orange
+            }
+            if let line = scheduler.onPositionLocked() {
+                audioCoach.speak(line, priority: 8)
+            }
+        }
+
         let result = comparator.evaluate(angles: angles, exercise: exercise, phase: phase)
         formResult = result
 
-        // Per-frame silent accumulation + optional mid-rep cue
-        if let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
+        // Per-frame silent accumulation + optional mid-rep cue (only once locked).
+        if currentState == .locked,
+           let line = scheduler.onFrame(result: result, repPhase: repCounter.phase) {
             audioCoach.speak(line, priority: 6)
         }
 
-        // Track peak of the primary angle (direction depends on exercise)
-        if let angle = primaryAngle {
+        // Track peak and count reps only after position is confirmed.
+        if currentState == .locked, let angle = primaryAngle {
             switch exercise {
             case .jumpingJacks, .deadlift:
                 peakAngle = max(peakAngle, angle)
@@ -323,7 +357,14 @@ struct SessionView: View {
         let now = CACurrentMediaTime()
         if now - lastBubbleUpdate >= 0.5 {
             lastBubbleUpdate = now
-            coachMessage = scheduler.visualHint(result: result)
+            switch currentState {
+            case .waiting:
+                coachMessage = exercise.startingPositionCue
+            case .approaching:
+                coachMessage = "Hold still… almost there"
+            case .locked:
+                coachMessage = scheduler.visualHint(result: result)
+            }
         }
     }
 

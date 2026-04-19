@@ -140,6 +140,11 @@ async def warm_cache() -> None:
         try:
             _cache[phrase] = await _fetch_audio(phrase, api_key)
             logger.info("  cached: %r", phrase)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (401, 403):
+                logger.error("ElevenLabs auth failed (%s) — aborting cache warm", exc.response.status_code)
+                return
+            logger.error("  failed to cache %r: %s", phrase, exc)
         except Exception as exc:
             logger.error("  failed to cache %r: %s", phrase, exc)
         await asyncio.sleep(0.1)  # be polite to the API
@@ -168,7 +173,10 @@ async def speak(body: TTSRequest):
     except httpx.TimeoutException:
         raise HTTPException(504, "ElevenLabs request timed out")
     except httpx.HTTPStatusError as e:
-        raise HTTPException(e.response.status_code, f"ElevenLabs error: {e.response.text[:200]}")
+        status = e.response.status_code
+        if status in (401, 403):
+            raise HTTPException(503, "ElevenLabs API key is invalid or unauthorized")
+        raise HTTPException(status, f"ElevenLabs error: {e.response.text[:200]}")
     except httpx.RequestError as e:
         raise HTTPException(502, f"ElevenLabs request error: {e}")
 
@@ -183,9 +191,6 @@ async def bundle():
     iOS downloads this once at session start and plays from local memory.
     Shape: { "phrases": { "<text>": "<base64 mp3>" } }
     """
-    if not _cache:
-        raise HTTPException(503, "TTS cache is not ready yet — try again in a moment")
-
     return {
         "phrases": {
             phrase: base64.b64encode(audio).decode()

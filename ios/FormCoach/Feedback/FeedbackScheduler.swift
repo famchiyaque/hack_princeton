@@ -125,6 +125,14 @@ final class FeedbackScheduler {
         return nil
     }
 
+    /// Called once when the starting-position detector transitions to `.locked`.
+    /// Bypasses the global cooldown so the cue always fires regardless of recent speech.
+    func onPositionLocked() -> String? {
+        let line = "Good, begin your reps"
+        markSpoken(line, bypassCooldown: true)
+        return line
+    }
+
     func onPaused() -> String? {
         let line = "Paused"
         markSpoken(line, bypassCooldown: true)
