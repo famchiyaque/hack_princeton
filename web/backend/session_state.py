@@ -27,6 +27,14 @@ class SessionState:
         self.started_at = time.time()
         self.last_rep_time = self.started_at
         self.current_exercise = ExerciseType.UNKNOWN
+        # If set, overrides the classifier (manual picker from the UI).
+        self.forced_exercise: Optional[ExerciseType] = None
+
+    def set_forced_exercise(self, ex: Optional[ExerciseType]):
+        self.forced_exercise = ex
+        if ex is not None:
+            # Reset the rep counter for that exercise so the count starts fresh.
+            self.rep_counters.pop(ex, None)
 
     def close(self):
         self.pose.close()
@@ -49,13 +57,16 @@ class SessionState:
             return {"type": "frame", "landmarks": {}, "exercise": "unknown"}
 
         angles = body_angles_from_joints(joints)
-        exercise = self.classifier.update(angles, joints)
+        detected = self.classifier.update(angles, joints)
+        exercise = self.forced_exercise if self.forced_exercise is not None else detected
         self.current_exercise = exercise
 
         rep_count = 0
         score = 0.0
         corrections: list[dict] = []
         phase = ""
+        rep_phase = "up"
+        primary_val: Optional[float] = None
 
         if exercise != ExerciseType.UNKNOWN:
             counter = self._counter_for(exercise)
@@ -64,6 +75,8 @@ class SessionState:
             if primary is not None:
                 rep_completed = counter.update(primary)
             rep_count = counter.rep_count
+            rep_phase = counter.phase.value
+            primary_val = primary
             phase = counter.scoring_phase()
             form = evaluate_form(angles, exercise, phase)
             score = form.score
@@ -104,6 +117,14 @@ class SessionState:
             "repCount": rep_count,
             "score": round(score, 1),
             "corrections": corrections,
+            "debug": {
+                "repPhase": rep_phase,
+                "primary": round(primary_val, 1) if primary_val is not None else None,
+                "candidate": self.classifier._candidate.value,
+                "stable": self.classifier.is_stable,
+                "downThreshold": self._counter_for(exercise).down_threshold if exercise != ExerciseType.UNKNOWN else None,
+                "upThreshold": self._counter_for(exercise).up_threshold if exercise != ExerciseType.UNKNOWN else None,
+            },
         }
 
     def build_report(self) -> SessionReport:

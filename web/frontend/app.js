@@ -1,7 +1,7 @@
 // Kinetic web prototype — captures webcam, streams JPEG frames to the
 // Python backend over WebSocket, renders the returned skeleton + HUD.
 
-const SEND_FPS = 12;             // how often we ship a frame to the server
+const SEND_FPS = 15;             // how often we ship a frame to the server
 const JPEG_QUALITY = 0.55;
 const SEND_WIDTH = 480;          // downscaled before transmit
 
@@ -30,6 +30,8 @@ const statusEl = document.getElementById("status");
 const endBtn = document.getElementById("end-btn");
 const againBtn = document.getElementById("again-btn");
 const muteBtn = document.getElementById("mute-btn");
+const debugBtn = document.getElementById("debug-btn");
+const debugPanel = document.getElementById("debug");
 
 // ── AudioCoach ──────────────────────────────────────────────────────────
 // Speaks form corrections via the browser's SpeechSynthesis API.
@@ -154,6 +156,26 @@ function updateHud(msg) {
     if (correctionTimer === 0) correctionEl.classList.remove("visible");
   }
   drawSkeleton(msg.landmarks || {});
+  updateDebug(msg);
+}
+
+function fmt(v) { return (v == null) ? "—" : v.toFixed(0); }
+
+function updateDebug(msg) {
+  if (debugPanel.classList.contains("hidden")) return;
+  const d = msg.debug || {};
+  const a = msg.angles || {};
+  document.getElementById("d-ex").textContent = msg.exercise || "—";
+  document.getElementById("d-cand").textContent = `${d.candidate || "—"} ${d.stable ? "✓" : ""}`;
+  document.getElementById("d-phase").textContent = d.repPhase || "—";
+  document.getElementById("d-primary").textContent = (d.primary != null) ? `${d.primary}°` : "—";
+  document.getElementById("d-thresh").textContent = (d.downThreshold != null)
+    ? `down<${d.downThreshold}  up>${d.upThreshold}` : "—";
+  document.getElementById("d-knee").textContent = `${fmt(a.knee)}°`;
+  document.getElementById("d-elbow").textContent = `${fmt(a.elbow)}°`;
+  document.getElementById("d-hip").textContent = `${fmt(a.hip)}°`;
+  document.getElementById("d-shoulder").textContent = `${fmt(a.shoulder)}°`;
+  document.getElementById("d-spine").textContent = `${fmt(a.spine)}°`;
 }
 
 // Joints that get a body-dot drawn (all bone endpoints). Head is handled separately.
@@ -243,6 +265,21 @@ endBtn.addEventListener("click", () => {
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify({ type: "end" }));
   }
+});
+
+debugBtn.addEventListener("click", () => {
+  debugPanel.classList.toggle("hidden");
+});
+
+document.querySelectorAll(".pick-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".pick-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const ex = btn.dataset.ex || null;
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: "setExercise", exercise: ex }));
+    }
+  });
 });
 
 muteBtn.addEventListener("click", () => {

@@ -87,6 +87,41 @@ html, body { height: 100%; background: #0b0d10; color: #f2f3f5; font-family: -ap
 .btn-ghost:hover { border-color: rgba(255,255,255,0.3); }
 .btn-ghost.muted { opacity: 0.55; }
 
+.debug {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  z-index: 3;
+  background: rgba(8, 10, 12, 0.85);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  min-width: 220px;
+  backdrop-filter: blur(10px);
+}
+.debug.hidden { display: none; }
+.debug-row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; }
+.debug-row span:first-child { opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; }
+.debug-row span:last-child { color: #ffd5a0; font-weight: 600; }
+.debug-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }
+
+.picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; max-width: 260px; }
+.pick-btn {
+  background: rgba(16, 18, 22, 0.78);
+  color: #f2f3f5;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+.pick-btn:hover { border-color: rgba(255,255,255,0.3); }
+.pick-btn.active { background: #ff7a3c; color: #0b0d10; border-color: #ff7a3c; }
+
 /* Report view */
 #report-view {
   position: absolute; inset: 0;

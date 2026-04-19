@@ -14,6 +14,13 @@
     <div class="hud top-left">
       <div class="pill" id="exercise-label">Detecting…</div>
       <div class="pill" id="phase-label">—</div>
+      <div class="picker">
+        <button class="pick-btn" data-ex="squat">Squat</button>
+        <button class="pick-btn" data-ex="pushup">Push-Up</button>
+        <button class="pick-btn" data-ex="deadlift">Deadlift</button>
+        <button class="pick-btn" data-ex="curl">Curl</button>
+        <button class="pick-btn pick-auto active" data-ex="">Auto</button>
+      </div>
     </div>
     <div class="hud top-right">
       <div class="metric">
@@ -29,8 +36,23 @@
 
     <div id="correction" class="correction"></div>
 
+    <div id="debug" class="debug hidden">
+      <div class="debug-row"><span>exercise</span><span id="d-ex">—</span></div>
+      <div class="debug-row"><span>candidate</span><span id="d-cand">—</span></div>
+      <div class="debug-row"><span>rep phase</span><span id="d-phase">—</span></div>
+      <div class="debug-row"><span>primary</span><span id="d-primary">—</span></div>
+      <div class="debug-row"><span>thresholds</span><span id="d-thresh">—</span></div>
+      <div class="debug-divider"></div>
+      <div class="debug-row"><span>knee</span><span id="d-knee">—</span></div>
+      <div class="debug-row"><span>elbow</span><span id="d-elbow">—</span></div>
+      <div class="debug-row"><span>hip</span><span id="d-hip">—</span></div>
+      <div class="debug-row"><span>shoulder</span><span id="d-shoulder">—</span></div>
+      <div class="debug-row"><span>spine</span><span id="d-spine">—</span></div>
+    </div>
+
     <div class="hud bottom">
       <button id="end-btn" class="btn">End Session</button>
+      <button id="debug-btn" class="btn-ghost" title="Toggle debug">🐞</button>
       <div id="status" class="status">connecting…</div>
     </div>
   </div>

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from exercise import ExerciseType
 from session_state import SessionState
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -39,18 +40,28 @@ async def ws_session(ws: WebSocket):
     try:
         while True:
             msg = await ws.receive()
-            if "bytes" in msg and msg["bytes"] is not None:
+            if msg.get("type") == "websocket.disconnect":
+                break
+            if msg.get("bytes") is not None:
                 result = session.process_frame(msg["bytes"])
                 await ws.send_text(json.dumps(result))
-            elif "text" in msg and msg["text"] is not None:
+            elif msg.get("text") is not None:
                 try:
                     payload = json.loads(msg["text"])
                 except json.JSONDecodeError:
                     continue
-                if payload.get("type") == "end":
+                ptype = payload.get("type")
+                if ptype == "end":
                     report = session.build_report()
                     await ws.send_text(json.dumps({"type": "report", "report": report.to_dict()}))
                     break
+                if ptype == "setExercise":
+                    val = payload.get("exercise")
+                    try:
+                        ex = ExerciseType(val) if val else None
+                    except ValueError:
+                        ex = None
+                    session.set_forced_exercise(ex)
     except WebSocketDisconnect:
         log.info("session disconnected")
     finally:
