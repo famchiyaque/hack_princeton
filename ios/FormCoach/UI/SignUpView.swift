@@ -127,7 +127,10 @@ struct SignUpView: View {
                         Task { await googleSignIn() }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "globe")
+                            Image("google_logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
                             Text("Continue with Google")
                         }
                     }
