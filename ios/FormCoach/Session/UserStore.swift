@@ -17,15 +17,16 @@ struct LocalUser: Codable, Equatable {
     var bodyGoals: [String]    // e.g. ["stronger_core", "better_posture"]
 
     enum CodingKeys: String, CodingKey {
-        case id, name, fitnessLevel, healthNotes, bodyGoals, goals
+        case id, email, name, fitnessLevel, healthNotes, bodyGoals, goals
         case weightLbs, heightFeet, heightInches, age, gender
         case legacyGoal = "goal"
     }
 
-    init(id: String, name: String, goals: [String], fitnessLevel: String,
+    init(id: String, email: String = "", name: String, goals: [String], fitnessLevel: String,
          weightLbs: Int, heightFeet: Int, heightInches: Int, age: Int, gender: String,
          healthNotes: [String], bodyGoals: [String]) {
         self.id = id
+        self.email = email
         self.name = name
         self.goals = goals
         self.fitnessLevel = fitnessLevel
@@ -41,6 +42,7 @@ struct LocalUser: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        email = try c.decodeIfPresent(String.self, forKey: .email) ?? ""
         name = try c.decode(String.self, forKey: .name)
         fitnessLevel = try c.decode(String.self, forKey: .fitnessLevel)
         weightLbs = try c.decodeIfPresent(Int.self, forKey: .weightLbs) ?? 175
@@ -62,6 +64,7 @@ struct LocalUser: Codable, Equatable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try c.encode(email, forKey: .email)
         try c.encode(name, forKey: .name)
         try c.encode(goals, forKey: .goals)
         try c.encode(fitnessLevel, forKey: .fitnessLevel)
@@ -127,7 +130,7 @@ final class UserStore: ObservableObject {
     func hydrateFromBackend(_ apiUser: APIUser) {
         update {
             $0.name = apiUser.name
-            $0.goal = apiUser.goal
+            $0.goals = apiUser.goals
             $0.fitnessLevel = apiUser.fitnessLevel
             $0.healthNotes = apiUser.healthNotes
             $0.bodyGoals = apiUser.bodyGoals

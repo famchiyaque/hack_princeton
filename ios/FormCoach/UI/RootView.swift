@@ -145,11 +145,11 @@ struct RootView: View {
 
         Task {
             let backendUser = try? await APIClient.shared.getMe()
-            let isNewUser = backendUser == nil || backendUser?.goal == "form" && !userStore.hasOnboarded
+            let isNewUser = backendUser == nil || (backendUser?.goals.isEmpty == true && !userStore.hasOnboarded)
             withAnimation(.easeInOut) {
                 flow = isNewUser ? .onboarding : .main
             }
-            if let existing = backendUser, existing.goal != "form" {
+            if let existing = backendUser, !existing.goals.isEmpty {
                 userStore.hydrateFromBackend(existing)
             }
         }
