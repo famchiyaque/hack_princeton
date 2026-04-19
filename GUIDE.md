@@ -91,6 +91,7 @@ hack_princeton/                # repository root (your clone directory name may 
 ### Getting started
 
 1. Initialize your framework inside the `frontend/` folder:
+
    ```bash
    # Pick ONE of these (or whatever framework the team decides on):
    cd frontend
@@ -115,22 +116,22 @@ hack_princeton/                # repository root (your clone directory name may 
 You never need to write raw `fetch()`. Import the pre-built client:
 
 ```js
-import api from '../shared/api-client';
+import api from "../shared/api-client";
 
 // GET request
-const { items } = await api.get('/items');
+const { items } = await api.get("/items");
 
 // GET with query params
-const results = await api.get('/items', { search: 'foo', limit: 10 });
+const results = await api.get("/items", { search: "foo", limit: 10 });
 
 // POST request
-const newItem = await api.post('/items', { name: 'My Thing' });
+const newItem = await api.post("/items", { name: "My Thing" });
 
 // PUT request
-const updated = await api.put('/items/123', { name: 'New Name' });
+const updated = await api.put("/items/123", { name: "New Name" });
 
 // DELETE request
-await api.delete('/items/123');
+await api.delete("/items/123");
 ```
 
 ### Authentication
@@ -139,23 +140,23 @@ If the app has login, call `api.setToken(jwt)` after the user logs in. Every sub
 
 ```js
 // After login
-const { token } = await api.post('/auth/login', { email, password });
+const { token } = await api.post("/auth/login", { email, password });
 api.setToken(token);
 
 // All future calls now authenticated
-const profile = await api.get('/users/me');
+const profile = await api.get("/users/me");
 ```
 
 ### How it finds the backend URL
 
 The API client automatically reads the correct env variable based on your framework:
 
-| Framework  | Env variable           | Example                         |
-|------------|------------------------|---------------------------------|
-| Next.js    | `NEXT_PUBLIC_API_URL`  | `http://localhost:8000/api`     |
-| Vite       | `VITE_API_URL`         | `http://localhost:8000/api`     |
-| CRA        | `REACT_APP_API_URL`    | `http://localhost:8000/api`     |
-| (default)  | --                     | `http://localhost:8000/api`     |
+| Framework | Env variable          | Example                     |
+| --------- | --------------------- | --------------------------- |
+| Next.js   | `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` |
+| Vite      | `VITE_API_URL`        | `http://localhost:8000/api` |
+| CRA       | `REACT_APP_API_URL`   | `http://localhost:8000/api` |
+| (default) | --                    | `http://localhost:8000/api` |
 
 You usually don't need to set these -- the default (`localhost:8000/api`) works for local dev.
 
@@ -172,6 +173,7 @@ Open `shared/api-contract.json` to see every available endpoint, what parameters
 We have two starter servers ready to go. Pick the one that matches our stack:
 
 **Python (FastAPI):**
+
 ```bash
 cp backend/starter-fastapi.py backend/main.py
 cd backend
@@ -180,6 +182,7 @@ uvicorn main:app --reload --port 8000
 ```
 
 **Node (Express):**
+
 ```bash
 cp backend/starter-express.js backend/index.js
 cd backend
@@ -188,6 +191,7 @@ node index.js
 ```
 
 Both starters come pre-configured with:
+
 - CORS (so the frontend can call your API from a different port)
 - JSON body parsing
 - Health check endpoint (`GET /api/health`)
@@ -198,14 +202,14 @@ Both starters come pre-configured with:
 
 The starter gives you these endpoints already working:
 
-| Method   | Path             | What it does              |
-|----------|------------------|---------------------------|
-| `GET`    | `/api/health`    | Returns `{ status: "ok" }` |
+| Method   | Path             | What it does                                            |
+| -------- | ---------------- | ------------------------------------------------------- |
+| `GET`    | `/api/health`    | Returns `{ status: "ok" }`                              |
 | `GET`    | `/api/items`     | List items (supports `?search=`, `?limit=`, `?offset=`) |
-| `GET`    | `/api/items/:id` | Get one item by ID        |
-| `POST`   | `/api/items`     | Create an item (`{ name }`) |
-| `PUT`    | `/api/items/:id` | Update an item            |
-| `DELETE` | `/api/items/:id` | Delete an item            |
+| `GET`    | `/api/items/:id` | Get one item by ID                                      |
+| `POST`   | `/api/items`     | Create an item (`{ name }`)                             |
+| `PUT`    | `/api/items/:id` | Update an item                                          |
+| `DELETE` | `/api/items/:id` | Delete an item                                          |
 
 ### Adapting to your actual project
 
@@ -217,6 +221,7 @@ The starter gives you these endpoints already working:
 ### Adding a database
 
 The `.env` file has placeholders for common databases:
+
 ```
 DATABASE_URL=sqlite:///./app.db                          # simplest
 DATABASE_URL=postgresql://user:pass@localhost:5432/hackathon  # postgres
@@ -307,6 +312,7 @@ SECRET_KEY=change-me
 ```
 
 **Important:**
+
 - `.env` is gitignored and never committed
 - `.env.example` is committed and shows what variables exist
 - If you add a new env variable, add it to `.env.example` too so teammates know about it
@@ -346,6 +352,7 @@ npm run dev
 ### Verifying everything works
 
 Once both servers are running:
+
 ```bash
 # Backend health check
 curl http://localhost:8000/api/health
@@ -369,6 +376,7 @@ Here's the workflow for adding, say, a "comments" feature:
 ### Step 1: Update the API contract
 
 Add to `shared/api-contract.json`:
+
 ```json
 "getComments": {
   "method": "GET",
@@ -393,13 +401,13 @@ Add routes in your backend that match those paths and return that response shape
 ### Step 3: Frontend calls the endpoints
 
 ```js
-import api from '../shared/api-client';
+import api from "../shared/api-client";
 
 // Fetch comments
 const { comments } = await api.get(`/items/${itemId}/comments`);
 
 // Add a comment
-const comment = await api.post(`/items/${itemId}/comments`, { text: 'Great!' });
+const comment = await api.post(`/items/${itemId}/comments`, { text: "Great!" });
 ```
 
 Both sides can work in parallel after Step 1. The frontend dev can build the UI using the expected response shape, and the backend dev can build the route. They'll just work when connected.
@@ -411,6 +419,7 @@ Both sides can work in parallel after Step 1. The frontend dev can build the UI 
 ### Adding auth (JWT)
 
 **Backend** -- add login/register endpoints that return a token:
+
 ```
 POST /api/auth/register  { email, password } -> { token, user }
 POST /api/auth/login     { email, password } -> { token, user }
@@ -418,9 +427,10 @@ GET  /api/users/me       (requires token)   -> { user }
 ```
 
 **Frontend** -- store the token and set it on the API client:
+
 ```js
-const { token } = await api.post('/auth/login', { email, password });
-localStorage.setItem('token', token);
+const { token } = await api.post("/auth/login", { email, password });
+localStorage.setItem("token", token);
 api.setToken(token);
 ```
 
@@ -446,26 +456,42 @@ api.setToken(token);
 ## 12. Troubleshooting
 
 ### "CORS error" in the browser console
+
 Your backend isn't allowing requests from your frontend's port. Check that `CORS_ORIGINS` in `.env` matches your frontend URL (default: `http://localhost:3000`).
 
 ### "Connection refused" when frontend calls API
+
 The backend isn't running. Start it first, then check it's on the right port (`BACKEND_PORT` in `.env`, default 8000).
 
 ### Frontend can't find `shared/api-client.js`
+
 Depending on your framework's import rules, you may need to adjust the relative path. Common fix:
+
 ```js
 // If your component is in frontend/src/components/
-import api from '../../../shared/api-client';
+import api from "../../../shared/api-client";
 // Or set up a path alias in your framework config
 ```
 
 ### `setup.sh` says "No frontend/backend dependencies found"
+
 That's normal if you haven't initialized a framework yet. Run it again after you've set up your frontend/backend with `npm init`, `pip install`, etc.
 
 ### Backend changes aren't showing up
+
 Make sure you're running with hot-reload:
+
 - FastAPI: `uvicorn main:app --reload`
 - Express: use `nodemon index.js` instead of `node index.js` (`npm install -g nodemon`)
 
 ### Two people changed the API contract
+
 Merge conflicts in `api-contract.json` are a sign of good communication breakdown. Sync up, decide on the endpoint shape together, and resolve the conflict. The contract is small enough that this should be quick.
+
+## Stuff to polish
+
+### Frontend
+
+- [What's your weight, height, age, and sex] very transparent, needs work
+- Modify moving icons on onboarding to non-moving icosn
+- Add google icon for google oauth
