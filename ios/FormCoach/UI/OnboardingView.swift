@@ -68,6 +68,7 @@ struct OnboardingView: View {
                     .padding(.bottom, 32)
             }
         }
+        .environment(\.colorScheme, .light)
     }
 
     // MARK: - Header
@@ -137,9 +138,10 @@ struct OnboardingView: View {
 
     private var profileWeightQuestion: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("What's your")
-                + Text("\nweight?").foregroundColor(KineticColor.orangeDeep)
-            Text("Scroll to select — pounds (lb)")
+            (Text("Let's personalize")
+                + Text("\nyour plan").foregroundColor(KineticColor.orangeDeep))
+                .font(KineticFont.display(26))
+            Text("This helps us tailor exercise recommendations")
                 .font(KineticFont.body(13))
                 .foregroundStyle(.gray)
             wheelPicker {
@@ -151,15 +153,15 @@ struct OnboardingView: View {
                 .pickerStyle(.wheel)
             }
         }
-        .font(KineticFont.display(26))
         .foregroundStyle(.black)
     }
 
     private var profileHeightQuestion: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("What's your")
-                + Text("\nheight?").foregroundColor(KineticColor.orangeDeep)
-            Text("Feet and inches")
+            (Text("How tall")
+                + Text("\nare you?").foregroundColor(KineticColor.orangeDeep))
+                .font(KineticFont.display(26))
+            Text("Used to calibrate movement tracking")
                 .font(KineticFont.body(13))
                 .foregroundStyle(.gray)
             wheelPicker {
@@ -181,15 +183,15 @@ struct OnboardingView: View {
                 }
             }
         }
-        .font(KineticFont.display(26))
         .foregroundStyle(.black)
     }
 
     private var profileAgeQuestion: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("How old")
-                + Text("\nare you?").foregroundColor(KineticColor.orangeDeep)
-            Text("Scroll to select your age")
+            (Text("What's your")
+                + Text("\nage?").foregroundColor(KineticColor.orangeDeep))
+                .font(KineticFont.display(26))
+            Text("Helps us set safe training intensity")
                 .font(KineticFont.body(13))
                 .foregroundStyle(.gray)
             wheelPicker {
@@ -201,15 +203,15 @@ struct OnboardingView: View {
                 .pickerStyle(.wheel)
             }
         }
-        .font(KineticFont.display(26))
         .foregroundStyle(.black)
     }
 
     private var profileGenderQuestion: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("How do you")
-                + Text("\nidentify?").foregroundColor(KineticColor.orangeDeep)
-            Text("Scroll to select")
+            (Text("How do you")
+                + Text("\nidentify?").foregroundColor(KineticColor.orangeDeep))
+                .font(KineticFont.display(26))
+            Text("Used for more accurate fitness benchmarks")
                 .font(KineticFont.body(13))
                 .foregroundStyle(.gray)
             wheelPicker {
@@ -221,14 +223,14 @@ struct OnboardingView: View {
                 .pickerStyle(.wheel)
             }
         }
-        .font(KineticFont.display(26))
         .foregroundStyle(.black)
     }
 
     private func wheelPicker<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
+            .environment(\.colorScheme, .light)
             .frame(height: 192)
-            .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Step 1: fitness goals (multi-select)
