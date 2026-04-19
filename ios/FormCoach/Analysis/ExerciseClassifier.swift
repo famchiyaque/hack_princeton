@@ -70,12 +70,12 @@ final class ExerciseClassifier: ObservableObject {
 
     // MARK: - Tunables
 
-    /// Window size in frames (~0.7 s at 30 fps).
-    private let windowSize = 20
-    /// Classify every N frames. Smaller = more responsive, more CPU.
-    private let classifyEvery = 6
+    /// Window size in frames (~0.5 s at 30 fps).
+    private let windowSize = 15
+    /// Classify every N frames.
+    private let classifyEvery = 5
     /// Consecutive windows that must agree before `detectedExercise` flips.
-    private let stickyWindows = 3
+    private let stickyWindows = 2
 
     // MARK: - State
 
@@ -143,8 +143,8 @@ final class ExerciseClassifier: ObservableObject {
         let wristYs   = samples.compactMap { $0.wristY }
 
         // Need enough data in the primary channels to say anything at all.
-        guard kneeVals.count >= windowSize / 2,
-              hipVals.count  >= windowSize / 2 else {
+        guard kneeVals.count >= windowSize / 3,
+              hipVals.count  >= windowSize / 3 else {
             return .unknown
         }
 
@@ -157,31 +157,34 @@ final class ExerciseClassifier: ObservableObject {
             return Double(mx - mn)
         }()
 
-        // Movement floor: if nothing is really moving, the user is idle/standing.
-        if kneeRange < 12 && hipRange < 12 && wristYTravel < 0.05 {
+        // Movement floor: require at least some joint motion so a still person
+        // doesn't accidentally match. Kept deliberately loose.
+        if kneeRange < 8 && hipRange < 8 {
             return .unknown
         }
 
-        // Squat: upright torso, knee drives the rep, hands stay roughly still.
+        // Squat: upright torso, knee angle is the primary driver of the rep.
+        // hipVsKnee < 2.0 allows for some hip movement (normal in a deep squat)
+        // without requiring perfect isolation.
         let looksLikeSquat =
-            spineMean > 150 &&
-            kneeRange > 25 &&
-            hipVsKnee < 1.6 &&
-            wristYTravel < 0.10
+            spineMean > 135 &&
+            kneeRange > 10 &&
+            hipVsKnee < 2.0
 
-        // Deadlift: hip-hinge dominates, vertical hand sweep (bar path),
-        // torso allowed to incline forward at the bottom.
+        // Deadlift: hip hinge clearly dominates over knee. Wrist travel is a
+        // soft signal only — unreliable at distance, so not required.
         let looksLikeDeadlift =
-            hipRange > 25 &&
-            hipVsKnee > 1.4 &&
-            wristYTravel > 0.15
+            hipRange > 10 &&
+            hipVsKnee > 1.3
 
         switch (looksLikeSquat, looksLikeDeadlift) {
         case (true, false):  return .squat
         case (false, true):  return .deadlift
         case (true, true):
-            // Tie-break by hand travel — a real deadlift has a much bigger sweep.
-            return wristYTravel > 0.18 ? .deadlift : .squat
+            // Both match — tie-break. Wrist travel helps when visible;
+            // otherwise fall back to hip-vs-knee ratio.
+            if wristYTravel > 0.07 { return .deadlift }
+            return hipVsKnee > 1.7 ? .deadlift : .squat
         default:             return .unknown
         }
     }
