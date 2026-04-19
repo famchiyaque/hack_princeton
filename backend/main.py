@@ -15,16 +15,22 @@ NOTE on architecture:
 """
 import asyncio
 import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 load_dotenv("../.env")
 
 from database import engine, SessionLocal
 from models import Base
-from routers import exercises, sessions, users, insights, records, analysis, tts
+from routers import exercises, sessions, users, insights, records, analysis, tts, web_session
 import seed_data
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "web" / "frontend"
 
 app = FastAPI(title="Kinetic API", version="1.0.0")
 
@@ -55,8 +61,25 @@ app.include_router(insights.router, prefix="/api")
 app.include_router(records.router, prefix="/api")
 app.include_router(analysis.router, prefix="/api")
 app.include_router(tts.router, prefix="/api")
+app.include_router(web_session.router)
 
 
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "kinetic"}
+
+
+if FRONTEND_DIR.exists():
+    @app.get("/")
+    def index():
+        return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/app.js")
+    def app_js():
+        return FileResponse(FRONTEND_DIR / "app.js")
+
+    @app.get("/styles.css")
+    def styles_css():
+        return FileResponse(FRONTEND_DIR / "styles.css")
+
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
