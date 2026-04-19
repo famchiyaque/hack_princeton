@@ -77,6 +77,8 @@ final class ExerciseClassifier: ObservableObject {
     /// True once the current label has been confirmed by the sticky filter.
     /// Useful for UI that wants to show a "Detecting..." state early on.
     @Published var isStable: Bool = false
+    /// After the first locked exercise, recognition stops (no more `update` work).
+    @Published private(set) var recognitionSuspended: Bool = false
 
     // MARK: - Tunables
 
@@ -102,7 +104,16 @@ final class ExerciseClassifier: ObservableObject {
 
     // MARK: - Public API
 
+    /// Call once a stable exercise is chosen; classifier stops consuming frames.
+    func suspendRecognition() {
+        DispatchQueue.main.async {
+            self.recognitionSuspended = true
+        }
+    }
+
     func update(angles: BodyAngles, pose: BodyPose) {
+        guard !recognitionSuspended else { return }
+
         samples.append(Sample(
             angles: angles,
             wristY: meanY(pose.point(for: .leftWrist), pose.point(for: .rightWrist)),
@@ -141,6 +152,7 @@ final class ExerciseClassifier: ObservableObject {
         DispatchQueue.main.async {
             self.detectedExercise = .unknown
             self.isStable = false
+            self.recognitionSuspended = false
         }
     }
 
@@ -167,8 +179,27 @@ final class ExerciseClassifier: ObservableObject {
             return Double(mx - mn)
         }()
 
+        let elbowVals = samples.compactMap { $0.angles.elbowAngle }
+        let elbowRange = (elbowVals.max() ?? 0) - (elbowVals.min() ?? 0)
+
         // Movement floor: require at least some joint motion so a still person
         // doesn't accidentally match. Kept deliberately loose.
+        if kneeRange < 8 && hipRange < 8 && elbowRange < 8 {
+            return .unknown
+        }
+
+        // Bicep curl: elbow flexion dominates; knees/hips stay relatively quiet vs squat/deadlift.
+        let looksLikeCurl =
+            elbowRange > 14 &&
+            kneeRange < 28 &&
+            hipRange < 32 &&
+            spineMean > 115 &&
+            elbowRange > kneeRange * 0.85
+
+        if looksLikeCurl {
+            return .curl
+        }
+
         if kneeRange < 8 && hipRange < 8 {
             return .unknown
         }
