@@ -23,13 +23,10 @@ struct SessionView: View {
     @State private var coachMessage: String = "Get into starting position"
     @State private var lastBubbleUpdate: TimeInterval = 0
 
-<<<<<<< Updated upstream
-=======
     @State private var posDetector = StartingPositionDetector()
     @State private var skeletonColor: Color = KineticColor.orange
 
     // Tracks the extreme of the primary angle during current rep for the report.
->>>>>>> Stashed changes
     @State private var peakAngle: Double = 0
 
     private let comparator = FormComparator()
@@ -107,15 +104,7 @@ struct SessionView: View {
         posDetector.reset()
         skeletonColor = KineticColor.orange
 
-<<<<<<< Updated upstream
-=======
-        if new == .unknown {
-            coachMessage = "Exercise not recognized — try squat or deadlift"
-            return
-        }
-
         coachMessage = new.startingPositionCue
->>>>>>> Stashed changes
         sessionMgr.selectExercise(new)
         if let line = scheduler.onExerciseStarted(new) {
             audioCoach.speak(line, priority: 9)
