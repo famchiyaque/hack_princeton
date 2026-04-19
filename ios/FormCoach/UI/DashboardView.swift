@@ -170,7 +170,7 @@ struct DashboardView: View {
     // MARK: - Start button
 
     private var startButton: some View {
-        Button(action: onStartSession) {
+        Button { onStartSession() } label: {
             HStack(spacing: 10) {
                 Image(systemName: "play.fill")
                 Text("Start Session")

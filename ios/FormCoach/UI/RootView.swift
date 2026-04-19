@@ -17,8 +17,6 @@ enum SessionStage: Identifiable {
     case ending
     case report(SessionReport)
 
-    /// Stable id for the whole lifecycle so SwiftUI treats every stage as the
-    /// same presented sheet and just re-renders the body.
     var id: String { "session-stage" }
 }
 
