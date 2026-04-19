@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kinetic Web</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="live-view">
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+
+    <div class="hud top-left">
+      <div class="pill" id="exercise-label">Detecting…</div>
+      <div class="pill" id="phase-label">—</div>
+    </div>
+    <div class="hud top-right">
+      <div class="metric">
+        <div class="metric-value" id="rep-count">0</div>
+        <div class="metric-label">reps</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="score">—</div>
+        <div class="metric-label">form</div>
+      </div>
+    </div>
+
+    <div id="correction" class="correction"></div>
+
+    <div class="hud bottom">
+      <button id="end-btn" class="btn">End Session</button>
+      <div id="status" class="status">connecting…</div>
+    </div>
+  </div>
+
+  <div id="report-view" hidden>
+    <div class="report-card">
+      <h1 id="r-exercise">Session Report</h1>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-value" id="r-reps">0</div><div>reps</div></div>
+        <div class="stat"><div class="stat-value" id="r-score">0</div><div>avg score</div></div>
+        <div class="stat"><div class="stat-value" id="r-consistency">0</div><div>consistency</div></div>
+        <div class="stat"><div class="stat-value" id="r-duration">0s</div><div>duration</div></div>
+      </div>
+
+      <h2>Strengths</h2>
+      <ul id="r-strengths"></ul>
+
+      <h2>Focus Areas</h2>
+      <ul id="r-risks"></ul>
+
+      <h2>Tempo</h2>
+      <div id="r-tempo"></div>
+
+      <h2>Per-rep scores</h2>
+      <div id="r-bars" class="bars"></div>
+
+      <button id="again-btn" class="btn">New Session</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
