@@ -27,7 +27,8 @@ struct SessionReport {
     let tempo: TempoAnalysis
     let consistency: Double         // 0–100, std-dev based
 
-    // Populated post-build by SessionView if the server sync failed.
+    // Populated post-build by SessionView once the server sync resolves.
+    var sessionId: String? = nil
     var saveError: String? = nil
 }
 

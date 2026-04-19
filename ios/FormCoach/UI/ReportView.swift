@@ -73,7 +73,7 @@ struct ReportView: View {
         )
     }
 
-    // MARK: - AI Coach placeholder (Phase 2 attachment point)
+    // MARK: - AI Coach review (live)
 
     private var aiCoachPlaceholder: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -81,8 +81,7 @@ struct ReportView: View {
                 .font(KineticFont.caption(10)).kerning(2)
                 .foregroundStyle(KineticColor.textSecondary)
 
-            AICoachPlaceholderCard()
-                .allowsHitTesting(false)
+            AICoachSummaryCard(sessionId: report.sessionId, saveError: report.saveError)
         }
     }
 
@@ -339,12 +338,22 @@ struct ReportView: View {
     }
 }
 
-// MARK: - AI Coach placeholder card
+// MARK: - AI Coach summary card
 
-/// Dormant card that holds the seat for the Phase-2 AI session summary.
-/// Visual only; non-interactive. A slow gradient sweep signals "pending future".
-private struct AICoachPlaceholderCard: View {
+/// Fetches the server-side AI summary for the session and renders it.
+/// States: loading (shimmer), error (friendly message), ready (3-paragraph summary).
+private struct AICoachSummaryCard: View {
+    let sessionId: String?
+    let saveError: String?
+
+    @State private var phase: Phase = .loading
     @State private var shimmer: CGFloat = -1
+
+    private enum Phase {
+        case loading
+        case ready(String)
+        case error(String)
+    }
 
     var body: some View {
         GlassCard(padding: 18) {
@@ -359,23 +368,64 @@ private struct AICoachPlaceholderCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Deeper analysis from your AI coach")
-                        .font(KineticFont.heading(15))
-                        .foregroundStyle(.white)
-                    Text("Coming soon — tailored insights on your technique, pacing, and next focus.")
-                        .font(KineticFont.body(12))
-                        .foregroundStyle(KineticColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    switch phase {
+                    case .loading:
+                        Text("Your AI coach is reviewing…")
+                            .font(KineticFont.heading(15))
+                            .foregroundStyle(.white)
+                        Text("Analyzing your form, pacing, and corrections.")
+                            .font(KineticFont.body(12))
+                            .foregroundStyle(KineticColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .ready(let text):
+                        Text("AI Coach Review")
+                            .font(KineticFont.heading(15))
+                            .foregroundStyle(.white)
+                        Text(text)
+                            .font(KineticFont.body(13))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .error(let message):
+                        Text("AI review unavailable")
+                            .font(KineticFont.heading(15))
+                            .foregroundStyle(.white)
+                        Text(message)
+                            .font(KineticFont.body(12))
+                            .foregroundStyle(KineticColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer(minLength: 0)
             }
         }
-        .overlay(shimmerOverlay)
+        .overlay(isLoading ? AnyView(shimmerOverlay) : AnyView(EmptyView()))
         .mask(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: false)) {
-                shimmer = 1.6
+        .onAppear { start() }
+    }
+
+    private var isLoading: Bool {
+        if case .loading = phase { return true }
+        return false
+    }
+
+    private func start() {
+        if saveError != nil || sessionId == nil {
+            phase = .error("Couldn't sync this session, so we can't generate a deeper review.")
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: false)) {
+            shimmer = 1.6
+        }
+
+        guard let id = sessionId else { return }
+        Task { @MainActor in
+            do {
+                let summary = try await APIClient.shared.requestSessionSummary(sessionId: id)
+                phase = .ready(summary)
+            } catch {
+                phase = .error("We couldn't reach the coach right now — try again later.")
             }
         }
     }

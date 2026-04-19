@@ -76,6 +76,24 @@ final class APIClient {
         return try decoder.decode(SessionsResponse.self, from: data).sessions
     }
 
+    // MARK: - Analysis (authenticated)
+
+    func requestSessionSummary(sessionId: String) async throws -> String {
+        var req = await authorizedRequest(url: url("/analysis/session-summary"), method: "POST")
+        req.httpBody = try encoder.encode(SessionSummaryRequest(sessionId: sessionId))
+        req.timeoutInterval = 20.0
+        let (data, response) = try await session.data(for: req)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "APIClient",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: body.isEmpty ? "HTTP \(http.statusCode)" : body]
+            )
+        }
+        return try decoder.decode(SessionSummaryResponse.self, from: data).summary
+    }
+
     // MARK: - Insights (authenticated — user derived from token)
 
     func getInsights() async throws -> APIInsights {

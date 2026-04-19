@@ -5,6 +5,7 @@ struct DashboardView: View {
     var onStartSession: () -> Void
 
     @State private var insights: APIInsights?
+    @State private var latestSession: APISession?
 
     var body: some View {
         ZStack {
@@ -17,6 +18,7 @@ struct DashboardView: View {
                     statsRow
                     programCard
                     startButton
+                    lastSessionCard
                     weeklyInsights
                     Color.clear.frame(height: 100)
                 }
@@ -179,6 +181,50 @@ struct DashboardView: View {
         .buttonStyle(PrimaryButtonStyle())
     }
 
+    // MARK: - Last session AI summary
+
+    @ViewBuilder private var lastSessionCard: some View {
+        if let session = latestSession, let summary = session.aiSummary, !summary.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Last Session Review")
+                        .font(KineticFont.heading(18))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text(relativeDate(session.createdAt))
+                        .font(KineticFont.caption(11))
+                        .foregroundStyle(KineticColor.textSecondary)
+                }
+
+                GlassCard(padding: 16) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            Circle().fill(KineticColor.orangeSoft).frame(width: 34, height: 34)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(KineticColor.orange)
+                        }
+                        Text(summary)
+                            .font(KineticFont.body(13))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private func relativeDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        guard let date else { return "" }
+        let rel = RelativeDateTimeFormatter()
+        rel.unitsStyle = .abbreviated
+        return rel.localizedString(for: date, relativeTo: Date())
+    }
+
     // MARK: - Weekly insights
 
     private var weeklyInsights: some View {
@@ -238,6 +284,9 @@ struct DashboardView: View {
     // MARK: - Data
 
     private func refresh() async {
-        insights = try? await APIClient.shared.getInsights()
+        async let insightsTask = APIClient.shared.getInsights()
+        async let sessionsTask = APIClient.shared.getSessions(limit: 1)
+        insights = try? await insightsTask
+        latestSession = (try? await sessionsTask)?.first
     }
 }

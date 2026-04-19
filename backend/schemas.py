@@ -79,6 +79,7 @@ class CreateSessionBody(BaseModel):
     exercises: list[SessionExerciseIn] = []
     totalDuration: int = 0
     startedAt: str = ""
+    clientReport: dict | None = None
 
 
 class SessionExerciseOut(BaseModel):
@@ -99,6 +100,7 @@ class SessionOut(BaseModel):
     startedAt: str
     createdAt: str
     exercises: list[SessionExerciseOut] = []
+    aiSummary: str | None = None
 
     model_config = {"from_attributes": True}
 

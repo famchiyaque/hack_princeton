@@ -48,6 +48,8 @@ class Session(Base):
     total_duration = Column(Integer)
     started_at = Column(String)
     created_at = Column(String, default=func.datetime("now"))
+    client_report = Column(JSON, nullable=True)
+    ai_summary = Column(String, nullable=True)
 
     exercises = relationship("SessionExercise", back_populates="session", cascade="all, delete-orphan")
 

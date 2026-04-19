@@ -465,8 +465,9 @@ struct SessionView: View {
         camera.stop()
         stage = .ending
         Task { @MainActor in
-            let result = await sessionMgr.endSession()
+            let result = await sessionMgr.endSession(report: report)
             report.saveError = result.saveError
+            report.sessionId = result.sessionId
             stage = .report(report)
         }
     }

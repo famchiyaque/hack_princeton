@@ -69,10 +69,31 @@ struct SessionExercisePayload: Codable {
     let corrections: [CorrectionCountPayload]
 }
 
+struct TempoDTO: Codable {
+    let avgRepSeconds: Double
+    let fastest: Double
+    let slowest: Double
+    let label: String
+}
+
+struct ClientReportDTO: Codable {
+    let exercise: String
+    let reps: Int
+    let duration: Int
+    let avgScore: Double
+    let consistency: Double
+    let perRepScores: [Double]
+    let tempo: TempoDTO
+    let strengths: [String]
+    let risks: [String]
+    let correctionsByType: [String: Int]
+}
+
 struct CreateSessionPayload: Codable {
     let exercises: [SessionExercisePayload]
     let totalDuration: Int
     let startedAt: String
+    let clientReport: ClientReportDTO?
 }
 
 struct APISessionExercise: Codable, Identifiable {
@@ -91,6 +112,18 @@ struct APISession: Codable, Identifiable {
     let startedAt: String
     let createdAt: String
     let exercises: [APISessionExercise]
+    let aiSummary: String?
+}
+
+// MARK: - Analysis
+
+struct SessionSummaryRequest: Codable {
+    let sessionId: String
+}
+
+struct SessionSummaryResponse: Codable {
+    let sessionId: String
+    let summary: String
 }
 
 struct SessionsResponse: Codable {

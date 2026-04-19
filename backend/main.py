@@ -21,10 +21,24 @@ from dotenv import load_dotenv
 
 load_dotenv("../.env")
 
+from sqlalchemy import text
+
 from database import engine, SessionLocal
 from models import Base
 from routers import exercises, sessions, users, insights, records, analysis, tts
 import seed_data
+
+
+def _ensure_session_columns() -> None:
+    """Lightweight SQLite migration for new Session columns."""
+    with engine.begin() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(sessions)")).fetchall()}
+        if not cols:
+            return
+        if "client_report" not in cols:
+            conn.execute(text("ALTER TABLE sessions ADD COLUMN client_report JSON"))
+        if "ai_summary" not in cols:
+            conn.execute(text("ALTER TABLE sessions ADD COLUMN ai_summary VARCHAR"))
 
 app = FastAPI(title="Kinetic API", version="1.0.0")
 
@@ -40,6 +54,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     Base.metadata.create_all(bind=engine)
+    _ensure_session_columns()
     db = SessionLocal()
     try:
         seed_data.seed(db)

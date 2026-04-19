@@ -30,6 +30,7 @@ def _session_to_out(s: Session) -> SessionOut:
         startedAt=s.started_at or "",
         createdAt=s.created_at or "",
         exercises=[_exercise_to_out(e) for e in s.exercises],
+        aiSummary=s.ai_summary,
     )
 
 
@@ -48,6 +49,7 @@ def create_session(
         total_duration=body.totalDuration,
         started_at=body.startedAt or now,
         created_at=now,
+        client_report=body.clientReport,
     )
     db.add(session)
 

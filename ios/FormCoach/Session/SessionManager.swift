@@ -86,11 +86,11 @@ final class SessionManager: ObservableObject {
         )
     }
 
-    func endSession() async -> SessionEndResult {
+    func endSession(report: SessionReport? = nil) async -> SessionEndResult {
         timer?.cancel()
         isActive = false
         if let active = activeExercise { completedExercises.append(active) }
-        let result = await postToBackend()
+        let result = await postToBackend(report: report)
         reset()
         return result
     }
@@ -106,7 +106,7 @@ final class SessionManager: ObservableObject {
 
     // MARK: - Backend sync
 
-    private func postToBackend() async -> SessionEndResult {
+    private func postToBackend(report: SessionReport?) async -> SessionEndResult {
         guard let start = sessionStart else {
             return SessionEndResult(sessionId: nil, saveError: "Session had no start time")
         }
@@ -124,7 +124,8 @@ final class SessionManager: ObservableObject {
         let payload = CreateSessionPayload(
             exercises: exercises,
             totalDuration: elapsedSeconds,
-            startedAt: ISO8601DateFormatter().string(from: start)
+            startedAt: ISO8601DateFormatter().string(from: start),
+            clientReport: report.map(Self.makeClientReportDTO)
         )
         do {
             let saved = try await APIClient.shared.createSession(payload)
@@ -145,5 +146,25 @@ final class SessionManager: ObservableObject {
             }
             return SessionEndResult(sessionId: nil, saveError: message)
         }
+    }
+
+    private static func makeClientReportDTO(from report: SessionReport) -> ClientReportDTO {
+        ClientReportDTO(
+            exercise: report.exercise.rawValue,
+            reps: report.reps,
+            duration: report.duration,
+            avgScore: report.avgScore,
+            consistency: report.consistency,
+            perRepScores: report.perRepScores,
+            tempo: TempoDTO(
+                avgRepSeconds: report.tempo.avgRepSeconds,
+                fastest: report.tempo.fastest,
+                slowest: report.tempo.slowest,
+                label: report.tempo.label
+            ),
+            strengths: report.strengths,
+            risks: report.risks,
+            correctionsByType: report.correctionsByType
+        )
     }
 }
